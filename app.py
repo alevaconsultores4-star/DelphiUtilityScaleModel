@@ -716,20 +716,30 @@ def _render_file_upload_section(s: ScenarioInputs, project_name: str, scenario_n
     
     # Handle file upload
     if uploaded_file is not None:
-        try:
-            file_metadata = _save_uploaded_file(uploaded_file, project_name, scenario_name, tab_name)
-            s.uploaded_files[tab_name].append(file_metadata)
-            
-            # Save to database
-            db = _load_db()
-            proj = db["projects"].setdefault(project_name, {"scenarios": {}})
-            proj["scenarios"][scenario_name] = _scenario_to_dict(s)
-            _save_db(db)
-            
-            st.success(f"✓ File '{file_metadata['filename']}' uploaded successfully.")
-            st.rerun()
-        except Exception as e:
-            st.error(f"Error uploading file: {str(e)}")
+        # Track processed files using session state to prevent duplicates
+        upload_state_key = f"last_uploaded_{tab_name}_{project_name}_{scenario_name}"
+        file_id = f"{uploaded_file.name}_{uploaded_file.size}"
+        last_processed = st.session_state.get(upload_state_key, None)
+        
+        # Only process if this is a new/different file
+        if last_processed != file_id:
+            try:
+                file_metadata = _save_uploaded_file(uploaded_file, project_name, scenario_name, tab_name)
+                s.uploaded_files[tab_name].append(file_metadata)
+                
+                # Save to database
+                db = _load_db()
+                proj = db["projects"].setdefault(project_name, {"scenarios": {}})
+                proj["scenarios"][scenario_name] = _scenario_to_dict(s)
+                _save_db(db)
+                
+                # Update session state to track this file as processed
+                st.session_state[upload_state_key] = file_id
+                
+                st.success(f"✓ File '{file_metadata['filename']}' uploaded successfully.")
+                st.rerun()
+            except Exception as e:
+                st.error(f"Error uploading file: {str(e)}")
     
     # Display uploaded files
     files = s.uploaded_files.get(tab_name, [])
@@ -2549,7 +2559,7 @@ with st.sidebar:
 
     if project_name == "(New project)":
         new_project = st.text_input("New project name", value="")
-        if st.button("Create project", type="primary", use_container_width=True):
+        if st.button("Create project", type="primary", width='stretch'):
             if new_project.strip():
                 db.setdefault("projects", {}).setdefault(new_project.strip(), {"scenarios": {}})
                 _save_db(db)
@@ -2565,7 +2575,7 @@ with st.sidebar:
 
     if scenario_name == "(New scenario)":
         new_s = st.text_input("New scenario name", value="Base")
-        if st.button("Create scenario", type="primary", use_container_width=True):
+        if st.button("Create scenario", type="primary", width='stretch'):
             nm = new_s.strip() or "Base"
             proj["scenarios"][nm] = _scenario_to_dict(ScenarioInputs(name=nm))
             _save_db(db)
@@ -2579,12 +2589,12 @@ with st.sidebar:
     st.divider()
     cdel1, cdel2 = st.columns(2)
     with cdel1:
-        if st.button("Save scenario", use_container_width=True):
+        if st.button("Save scenario", width='stretch'):
             proj["scenarios"][scenario_name] = _scenario_to_dict(s)
             _save_db(db)
             st.success("Saved.")
     with cdel2:
-        if st.button("Delete scenario", use_container_width=True):
+        if st.button("Delete scenario", width='stretch'):
             try:
                 del proj["scenarios"][scenario_name]
                 _save_db(db)
@@ -2763,7 +2773,7 @@ with tab_timeline:
         fig.update_yaxes(autorange="reversed")
         fig.update_xaxes(dtick="M12", tickformat="%Y")
         fig.update_layout(height=280, margin=dict(l=10, r=10, t=10, b=10), legend_title_text="")
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')
 
     # CAPEX Task Schedule (Visual Reference Only)
     st.markdown("#### CAPEX Task Schedule (Visual Reference - Not Used in Calculations)")
@@ -2822,7 +2832,7 @@ with tab_timeline:
         
         edited_tasks = st.data_editor(
             tasks_df,
-            use_container_width=True,
+            width='stretch',
             hide_index=True,
             num_rows="fixed",
             key=f"capex_tasks_editor_{scenario_key}",
@@ -2906,7 +2916,7 @@ with tab_timeline:
                     legend_title_text="",
                     showlegend=False
                 )
-                st.plotly_chart(fig_tasks, use_container_width=True)
+                st.plotly_chart(fig_tasks, width='stretch')
             else:
                 st.warning("⚠️ Chart unavailable")
             
@@ -2981,7 +2991,7 @@ with tab_gen:
     if PLOTLY_AVAILABLE and px is not None:
         fig = px.line(op, x="Year", y="Energy (MWh)")
         fig.update_layout(height=320, margin=dict(l=10, r=10, t=10, b=10))
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')
     else:
         st.warning("⚠️ Chart unavailable")
     
@@ -3204,7 +3214,7 @@ with tab_rev:
         prices_df["COP_per_kWh_constant"] = prices_df["OpYear"].apply(lambda i: float(r.prices_constant_cop_per_kwh.get(int(i), 0.0)))
         edited = st.data_editor(
             prices_df,
-            use_container_width=True,
+            width='stretch',
             hide_index=True,
             num_rows="fixed",
             key="manual_prices_editor",  # Add key to ensure proper state management
@@ -3229,21 +3239,21 @@ with tab_rev:
         if PLOTLY_AVAILABLE and px is not None:
             fig1 = px.bar(op, x="Year", y="Energy (MWh)")
             fig1.update_layout(height=320, margin=dict(l=10, r=10, t=10, b=10))
-            st.plotly_chart(fig1, use_container_width=True)
+            st.plotly_chart(fig1, width='stretch')
         else:
             st.warning("⚠️ Chart unavailable")
     with c2:
         if PLOTLY_AVAILABLE and px is not None:
             fig2 = px.line(op, x="Year", y="Revenue (COP)")
             fig2.update_layout(height=320, margin=dict(l=10, r=10, t=10, b=10))
-            st.plotly_chart(fig2, use_container_width=True)
+            st.plotly_chart(fig2, width='stretch')
         else:
             st.warning("⚠️ Chart unavailable")
 
     disp = op.copy()
     disp = _df_format_money(disp, ["Energy (MWh)", "Price (COP/kWh)", "Revenue (COP)"], decimals=0)
     disp = _transpose_annual_table(disp)
-    st.dataframe(disp, use_container_width=True, hide_index=True)
+    st.dataframe(disp, width='stretch', hide_index=True)
     
     # File upload section
     _render_file_upload_section(s, project_name, scenario_name, "revenues", "Reference Files (PPA / Contracts / Documents)")
@@ -3266,7 +3276,7 @@ with tab_capex:
 
     edited = st.data_editor(
         capex_df,
-        use_container_width=True,
+        width='stretch',
         hide_index=True,
         num_rows="dynamic",
         column_config={
@@ -3310,7 +3320,7 @@ with tab_capex:
             fig_pie = px.pie(capex_pie, names="Item", values="Amount_COP", hole=0.45)
             fig_pie.update_traces(textinfo="percent+label")
             fig_pie.update_layout(height=380, margin=dict(l=10, r=10, t=10, b=10), legend_title_text="")
-            st.plotly_chart(fig_pie, use_container_width=True, key="capex_breakdown_pie")
+            st.plotly_chart(fig_pie, width='stretch', key="capex_breakdown_pie")
         else:
             st.warning("⚠️ Chart unavailable")
     
@@ -3319,19 +3329,19 @@ with tab_capex:
     # Ensure CAPEX (COP) column is numeric and fill any NaN with 0
     sched["CAPEX (COP)"] = pd.to_numeric(sched["CAPEX (COP)"], errors="coerce").fillna(0.0)
     sched_disp = _df_format_money(sched.copy(), ["CAPEX (COP)"], decimals=0)
-    st.dataframe(sched_disp[["Month", "Phase", "CAPEX (COP)"]], use_container_width=True, hide_index=True)
+    st.dataframe(sched_disp[["Month", "Phase", "CAPEX (COP)"]], width='stretch', hide_index=True)
 
     if PLOTLY_AVAILABLE and px is not None:
         fig = px.bar(sched, x="Month", y="CAPEX (COP)", color="Phase")
         fig.update_layout(height=320, margin=dict(l=10, r=10, t=10, b=10))
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')
     else:
         st.warning("⚠️ Chart unavailable")
 
     st.markdown("#### Annual CAPEX (calendar years)")
     ann = sched.groupby("Year", as_index=False)["CAPEX (COP)"].sum()
     ann_disp = _df_format_money(ann.copy(), ["CAPEX (COP)"], decimals=0)
-    st.dataframe(ann_disp, use_container_width=True, hide_index=True)
+    st.dataframe(ann_disp, width='stretch', hide_index=True)
     
     # File upload section
     _render_file_upload_section(s, project_name, scenario_name, "capex", "Reference Files (Quotes / Contracts / Documents)")
@@ -3385,7 +3395,7 @@ with tab_opex:
 
     o_edited = st.data_editor(
         o_df,
-        use_container_width=True,
+        width='stretch',
         hide_index=True,
         num_rows="dynamic",
         column_config={
@@ -3414,7 +3424,7 @@ with tab_opex:
     if PLOTLY_AVAILABLE and px is not None:
         fig = px.bar(long, x="Year", y="OPEX (COP)", color="Item", barmode="stack")
         fig.update_layout(height=360, margin=dict(l=10, r=10, t=10, b=10), legend_title_text="")
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')
     else:
         st.warning("⚠️ Chart unavailable")
 
@@ -3427,7 +3437,7 @@ with tab_opex:
 
     disp = _df_format_money(annual.copy(), ["OPEX subtotal", "GMF", "Total OPEX (COP)", "OPEX per MWh (COP/MWh)", "Energy (MWh)"], decimals=0)
     disp = _transpose_annual_table(disp)
-    st.dataframe(disp, use_container_width=True, hide_index=True)
+    st.dataframe(disp, width='stretch', hide_index=True)
     
     # File upload section
     _render_file_upload_section(s, project_name, scenario_name, "opex", "Reference Files (Quotes / Contracts / Documents)")
@@ -3449,7 +3459,7 @@ with tab_sga:
 
     sga_edited = st.data_editor(
         sga_df,
-        use_container_width=True,
+        width='stretch',
         hide_index=True,
         num_rows="dynamic",
         column_config={
@@ -3471,7 +3481,7 @@ with tab_sga:
         if PLOTLY_AVAILABLE and px is not None:
             fig = px.bar(annual_long, x="Year", y="SG&A (COP)", color="Item", barmode="stack")
             fig.update_layout(height=380, margin=dict(l=10, r=10, t=10, b=10))
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
         else:
             st.warning("⚠️ Chart unavailable")
     else:
@@ -3479,7 +3489,7 @@ with tab_sga:
 
     annual_disp = _df_format_money(annual_sga.copy(), [c for c in annual_sga.columns if c != "Year"], decimals=0)
     annual_disp = _transpose_annual_table(annual_disp)
-    st.dataframe(annual_disp, use_container_width=True, hide_index=True)
+    st.dataframe(annual_disp, width='stretch', hide_index=True)
 
 
 # -----------------------------
@@ -3515,13 +3525,13 @@ with tab_dep:
     if PLOTLY_AVAILABLE and px is not None:
         fig = px.bar(dep, x="Year", y="Depreciation (COP)")
         fig.update_layout(height=340, margin=dict(l=10, r=10, t=10, b=10))
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')
     else:
         st.warning("⚠️ Chart unavailable")
 
     dep_disp = _df_format_money(dep.copy(), [c for c in dep.columns if c != "Year"], decimals=0)
     dep_disp = _transpose_annual_table(dep_disp)
-    st.dataframe(dep_disp, use_container_width=True, hide_index=True)
+    st.dataframe(dep_disp, width='stretch', hide_index=True)
 
 
 # -----------------------------
@@ -3667,7 +3677,7 @@ with tab_debt:
         money_cols = ["Operating CF (COP)", "Interest (COP)", "Principal (COP)", "Debt Service (COP)", "Outstanding End (COP)", "Balloon at Maturity (COP)", "Upfront Fee (COP)"]
         disp = _df_format_money(disp, money_cols, decimals=0)
         disp = _transpose_annual_table(disp)
-        st.dataframe(disp, use_container_width=True, hide_index=True)
+        st.dataframe(disp, width='stretch', hide_index=True)
 
         st.markdown("### DSCR vs covenant thresholds")
         ds_plot = ds.copy()
@@ -3677,7 +3687,7 @@ with tab_debt:
         if PLOTLY_AVAILABLE and px is not None:
             fig = px.line(ds_long, x="Year", y="Value", color="Line")
             fig.update_layout(height=320, margin=dict(l=10, r=10, t=10, b=10))
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
         else:
             st.warning("⚠️ Chart unavailable")
 
@@ -3687,11 +3697,11 @@ with tab_debt:
         else:
             com_disp = _df_format_money(com.copy(), ["Commitment Fee (COP)"], decimals=0)
             com_disp = _transpose_annual_table(com_disp)
-            st.dataframe(com_disp, use_container_width=True, hide_index=True)
+            st.dataframe(com_disp, width='stretch', hide_index=True)
             if PLOTLY_AVAILABLE and px is not None:
                 figc = px.bar(com, x="Year", y="Commitment Fee (COP)")
                 figc.update_layout(height=260, margin=dict(l=10, r=10, t=10, b=10))
-                st.plotly_chart(figc, use_container_width=True)
+                st.plotly_chart(figc, width='stretch')
             else:
                 st.warning("⚠️ Chart unavailable")
 
@@ -3967,13 +3977,13 @@ with tab_ucf:
     disp = annual_view[display_cols].copy()
     disp = _df_format_money(disp, [c for c in disp.columns if c != "Year"], decimals=0)
     disp = _transpose_annual_table(disp)
-    st.dataframe(disp, use_container_width=True, hide_index=True)
+    st.dataframe(disp, width='stretch', hide_index=True)
 
     y_after = "Unlevered CF After Tax (COP)" if currency == "COP" else "Unlevered CF After Tax (USD)"
     if PLOTLY_AVAILABLE and px is not None:
         fig = px.bar(annual_view, x="Year", y=y_after)
         fig.update_layout(height=320, margin=dict(l=10, r=10, t=10, b=10))
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')
     else:
         st.warning("⚠️ Chart unavailable")
 
@@ -3981,7 +3991,7 @@ with tab_ucf:
     m_disp = mm.copy()
     m_money = [c for c in m_disp.columns if c not in ["Month", "Year", "Phase"]]
     m_disp = _df_format_money(m_disp, m_money, decimals=0)
-    st.dataframe(m_disp, use_container_width=True, hide_index=True)
+    st.dataframe(m_disp, width='stretch', hide_index=True)
 
 
 # -----------------------------
@@ -4123,7 +4133,7 @@ with tab_levered:
     disp = annual_view[display_cols].copy()
     disp = _df_format_money(disp, [c for c in disp.columns if c != "Year"], decimals=0)
     disp = _transpose_annual_table(disp)
-    st.dataframe(disp, use_container_width=True, hide_index=True)
+    st.dataframe(disp, width='stretch', hide_index=True)
     
     # Detailed Levered Free Cash Flow Calculation Table
     st.markdown("### Levered Free Cash Flow Calculation (Step-by-Step)")
@@ -4165,7 +4175,7 @@ with tab_levered:
     # Format the table
     fcf_df = _df_format_money(fcf_df, [c for c in fcf_df.columns if c != "Year"], decimals=0)
     fcf_df = _transpose_annual_table(fcf_df)
-    st.dataframe(fcf_df, use_container_width=True, hide_index=True)
+    st.dataframe(fcf_df, width='stretch', hide_index=True)
     
     # Income Statement Graph
     st.markdown("### Income Statement Overview")
@@ -4213,7 +4223,7 @@ with tab_levered:
         fig_income.add_vline(x=end_op_year, line_dash="dash", line_color="red", annotation_text="End Op", annotation_position="top")
         
         fig_income.update_layout(height=400, margin=dict(l=10, r=10, t=40, b=10))
-        st.plotly_chart(fig_income, use_container_width=True)
+        st.plotly_chart(fig_income, width='stretch')
     else:
         st.warning("⚠️ Chart unavailable")
     
@@ -4243,7 +4253,7 @@ with tab_levered:
         margin=dict(l=10, r=10, t=40, b=10),
         title="Equity/Levered After-Tax Free Cash Flow"
     )
-    st.plotly_chart(fig_fcf, use_container_width=True)
+    st.plotly_chart(fig_fcf, width='stretch')
     
     # Calculation table showing how levered FCF is derived
     st.markdown("#### Levered Free Cash Flow Calculation")
@@ -4317,7 +4327,7 @@ with tab_levered:
     # Format the table
     calc_df = _df_format_money(calc_df, [c for c in calc_df.columns if c != "Year"], decimals=0)
     calc_df = _transpose_annual_table(calc_df)
-    st.dataframe(calc_df, use_container_width=True, hide_index=True)
+    st.dataframe(calc_df, width='stretch', hide_index=True)
     
     # Cumulative Levered CF Chart (larger)
     y_cum = "Cumulative Levered CF (COP)" if currency == "COP" else "Cumulative Levered CF (USD)"
@@ -4339,7 +4349,7 @@ with tab_levered:
         fig2.add_vline(x=end_op_year, line_dash="dash", line_color="red", annotation_text="End of Operation", annotation_position="top")
         
         fig2.update_layout(height=500, margin=dict(l=10, r=10, t=40, b=10), title="Cumulative Levered Cash Flow (After-Tax)")
-        st.plotly_chart(fig2, use_container_width=True)
+        st.plotly_chart(fig2, width='stretch')
     else:
         st.warning("⚠️ Chart unavailable")
     
@@ -4369,7 +4379,7 @@ with tab_levered:
     fig3.add_vline(x=end_op_year, line_dash="dash", line_color="red", annotation_text="End Op", annotation_position="top")
     
     fig3.update_layout(height=360, margin=dict(l=10, r=10, t=40, b=10))
-    st.plotly_chart(fig3, use_container_width=True)
+    st.plotly_chart(fig3, width='stretch')
     
     # Monthly table (optional, collapsed)
     with st.expander("Monthly levered cash flow (detailed)"):
@@ -4383,7 +4393,7 @@ with tab_levered:
                     m_disp = m_disp.rename(columns={c: new_name})
         
         m_disp = _df_format_money(m_disp, [c for c in m_disp.columns if c not in ["Month", "Year", "Phase"]], decimals=0)
-        st.dataframe(m_disp, use_container_width=True, hide_index=True)
+        st.dataframe(m_disp, width='stretch', hide_index=True)
 
 
 # -----------------------------
@@ -4422,7 +4432,7 @@ with tab_compare:
         for col in ["Total CAPEX (COP)", "CAPEX/MWac (COP)", "Total OPEX (COP)", "Total Revenue (COP)"]:
             if col in disp.columns:
                 disp[col] = disp[col].apply(lambda v: _fmt_num(float(v), 0) if pd.notnull(v) else "")
-        st.dataframe(disp, use_container_width=True, hide_index=True)
+        st.dataframe(disp, width='stretch', hide_index=True)
 
 
 # -----------------------------
@@ -7271,7 +7281,7 @@ with tab_summary:
     with export_col1:
         if REPORTLAB_AVAILABLE:
             # PDF generation temporarily disabled due to plotly/kaleido issues
-            if False and st.button("📄 Generate PDF Report", type="primary", use_container_width=True, key="pdf_export_btn"):
+            if False and st.button("📄 Generate PDF Report", type="primary", width='stretch', key="pdf_export_btn"):
                 try:
                     sensitivity_data = None  # Could be enhanced to capture from sensitivity tab
                     pdf_buffer = generate_summary_pdf(
@@ -7286,7 +7296,7 @@ with tab_summary:
                         data=pdf_buffer,
                         file_name=f"{project_name}_{scenario_name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf",
                         mime="application/pdf",
-                        use_container_width=True,
+                        width='stretch',
                         key="pdf_download_btn"
                     )
                     st.success("PDF generated successfully!")
@@ -7297,7 +7307,7 @@ with tab_summary:
     
     with export_col2:
         if OPENPYXL_AVAILABLE:
-            if st.button("📊 Generate Excel Report", type="primary", use_container_width=True, key="excel_export_btn"):
+            if st.button("📊 Generate Excel Report", type="primary", width='stretch', key="excel_export_btn"):
                 try:
                     excel_buffer = generate_excel_report(
                         project_name=project_name,
@@ -7309,7 +7319,7 @@ with tab_summary:
                         data=excel_buffer,
                         file_name=f"{project_name}_{scenario_name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                        use_container_width=True,
+                        width='stretch',
                         key="excel_download_btn"
                     )
                     st.success("Excel file generated successfully!")
@@ -7412,7 +7422,7 @@ with tab_summary:
         fig_pie = px.pie(capex_pie, names="Item", values="Amount_COP", hole=0.45)
         fig_pie.update_traces(textinfo="percent+label")
         fig_pie.update_layout(height=260, margin=dict(l=10, r=10, t=10, b=10), legend_title_text="")
-        st.plotly_chart(fig_pie, use_container_width=True, key="summary_capex_pie")
+        st.plotly_chart(fig_pie, width='stretch', key="summary_capex_pie")
     
     st.divider()
     
@@ -7463,7 +7473,7 @@ with tab_summary:
             dep_display = dep_display.drop(columns=["Depreciation (COP)"])
         dep_display = _df_format_money(dep_display, [c for c in dep_display.columns if c != "Year"], decimals=0)
         dep_display = _transpose_annual_table(dep_display)
-        st.dataframe(dep_display, use_container_width=True, hide_index=True)
+        st.dataframe(dep_display, width='stretch', hide_index=True)
     
     st.divider()
     
@@ -7569,7 +7579,7 @@ with tab_summary:
             money_cols = [c for c in irr_table.columns if c != "Year"]
             irr_table = _df_format_money(irr_table, money_cols, decimals=0)
             irr_table = _transpose_annual_table(irr_table)
-            st.dataframe(irr_table, use_container_width=True, hide_index=True)
+            st.dataframe(irr_table, width='stretch', hide_index=True)
             
             # Show summary row
             total_negative = sum([cf for cf in annual_cf_levered if cf < 0])
@@ -7579,7 +7589,7 @@ with tab_summary:
                 "Levered CF (After-tax, COP)" if currency == "COP" else "Levered CF (After-tax, USD)": 
                     _fmt_cop(sum(annual_cf_levered)) if currency == "COP" else _fmt_usd(_to_usd(sum(annual_cf_levered), cod.year))
             }])
-            st.dataframe(summary_row, use_container_width=True, hide_index=True)
+            st.dataframe(summary_row, width='stretch', hide_index=True)
     
     st.divider()
     
@@ -7619,7 +7629,7 @@ with tab_summary:
             margin=dict(l=10, r=10, t=40, b=10),
             title="Equity/Levered After-Tax Free Cash Flow"
         )
-        st.plotly_chart(fig_fcf, use_container_width=True, key="summary_fcf_chart")
+        st.plotly_chart(fig_fcf, width='stretch', key="summary_fcf_chart")
     else:
         st.warning("⚠️ Chart unavailable")
     
@@ -7663,7 +7673,7 @@ with tab_summary:
     fig_income.add_vline(x=end_op_year, line_dash="dash", line_color="red", annotation_text="End Op", annotation_position="top")
     
     fig_income.update_layout(height=320, margin=dict(l=10, r=10, t=40, b=10))
-    st.plotly_chart(fig_income, use_container_width=True, key="summary_income_chart")
+    st.plotly_chart(fig_income, width='stretch', key="summary_income_chart")
     
     st.divider()
     
@@ -7938,7 +7948,7 @@ with tab_summary:
                         comp_df.at[idx, col] = "—"
     
     # Display the comprehensive table
-    st.dataframe(comp_df, use_container_width=True, hide_index=True)
+    st.dataframe(comp_df, width='stretch', hide_index=True)
 
 
 # -----------------------------
@@ -8199,7 +8209,7 @@ with tab_sensitivity:
         pivot_display.index.name = var2_name
         pivot_display.columns.name = var1_name
         
-        st.dataframe(pivot_display, use_container_width=True)
+        st.dataframe(pivot_display, width='stretch')
         
         # Create heatmap with text annotations
         st.markdown("### Sensitivity Heatmap")
@@ -8275,7 +8285,7 @@ with tab_sensitivity:
                 height=500,
                 margin=dict(l=10, r=10, t=50, b=10)
             )
-            st.plotly_chart(fig, use_container_width=True, key="sensitivity_heatmap")
+            st.plotly_chart(fig, width='stretch', key="sensitivity_heatmap")
         else:
             st.warning("⚠️ Chart unavailable")
 
