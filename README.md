@@ -42,7 +42,7 @@ pip install -r requirements.txt
 ## Running Locally
 
 ```bash
-streamlit run appv7.py
+streamlit run app.py
 ```
 
 The app will open in your browser at `http://localhost:8501`
@@ -54,12 +54,12 @@ The app will open in your browser at `http://localhost:8501`
 3. Sign in with your GitHub account
 4. Click "New app"
 5. Select your repository and branch
-6. Set the main file path to: `appv7.py`
+6. Set the main file path to: `app.py`
 7. Click "Deploy"
 
 ## Project Structure
 
-- `appv7.py` - Main application file
+- `app.py` - Main application file
 - `requirements.txt` - Python dependencies
 - `delphi_projects.json` - Project data (created automatically, not in git)
 
