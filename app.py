@@ -8416,7 +8416,7 @@ with tab_summary:
                         comp_df.at[idx, col] = "—"
     
     # Display the comprehensive table (show all rows)
-    st.dataframe(comp_df, width='stretch', height='content', hide_index=True)
+    st.dataframe(comp_df, use_container_width=True, hide_index=True)
     
     st.divider()
     
