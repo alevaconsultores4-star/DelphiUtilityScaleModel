@@ -4,6 +4,15 @@
       "scenarios": {
         "Base Case": {
           "name": "Base Case",
+          "project_overview": {
+            "project_name": "",
+            "country": "",
+            "region_department": "",
+            "technology": "",
+            "installed_capacity_mw": 0.0,
+            "short_description": "",
+            "optional_notes": ""
+          },
           "macro": {
             "col_cpi": 4.4,
             "col_ppi": 4.5,
@@ -214,7 +223,7 @@
             "min_dscr_covenant": 1.2,
             "lockup_dscr": 1.15,
             "amortization_type": "Sculpted to DSCR",
-            "balloon_pct": 0.0
+            "balloon_pct": 32.0
           },
           "renewable_tax": {
             "enable_special_deduction": true,
@@ -242,41 +251,46 @@
             "capex": [],
             "opex": []
           }
-        }
-      }
-    },
-    "CIBulk - La Veranera": {
-      "scenarios": {
-        "Cliente Dec 2025": {
-          "name": "Cliente Dec 2025",
+        },
+        "Copy of Base Case": {
+          "name": "Copy of Base Case",
+          "project_overview": {
+            "project_name": "",
+            "country": "",
+            "region_department": "",
+            "technology": "",
+            "installed_capacity_mw": 0.0,
+            "short_description": "",
+            "optional_notes": ""
+          },
           "macro": {
-            "col_cpi": 10.0,
-            "col_ppi": 7.33,
-            "us_cpi": 3.0,
+            "col_cpi": 4.4,
+            "col_ppi": 4.5,
+            "us_cpi": 2.7,
             "custom_index_rate": 5.0,
             "fx_cop_per_usd_start": 3900.0,
             "fx_method": "Inflation differential (PPP approx.)",
             "fx_flat": 4000.0
           },
           "timeline": {
-            "start_date": "2025-12-28",
-            "dev_months": 1,
-            "capex_months": 6,
-            "operation_years": 20
+            "start_date": "2025-11-01",
+            "dev_months": 24,
+            "capex_months": 24,
+            "operation_years": 25
           },
           "generation": {
-            "mwac": 1.0,
-            "mwp": 1.3,
-            "p50_mwh_yr": 2299.0,
-            "p75_mwh_yr": 1.0,
-            "p90_mwh_yr": 1.0,
+            "mwac": 100.0,
+            "mwp": 130.0,
+            "p50_mwh_yr": 258700.0,
+            "p75_mwh_yr": 242000.0,
+            "p90_mwh_yr": 236000.0,
             "production_choice": "P50",
             "degradation_pct": 0.5
           },
           "revenue_mode": "Standard PPA Parameters",
           "revenue1": {
-            "ppa_price_cop_per_kwh": 350.0,
-            "ppa_term_years": 20,
+            "ppa_price_cop_per_kwh": 320.0,
+            "ppa_term_years": 25,
             "merchant_price_cop_per_kwh": 250.0,
             "indexation": "Colombia PPI"
           },
@@ -310,11 +324,276 @@
             },
             "indexation": "Colombia CPI"
           },
+          "ppa_contract": {
+            "type_id": "pay_as_generated_100",
+            "ui_label_es": "Pague lo generado (100%)",
+            "ui_label_en": "Pay-as-Generated (100%)",
+            "cap_mode": "% de P50",
+            "cap_value": 100.0,
+            "excess_treatment": "Spot",
+            "excess_discount_pct": 80.0,
+            "block_mode": "% de P50",
+            "block_value": 100.0,
+            "settlement_price_mode": "Spot (promedio)",
+            "settlement_price_fixed": 0.0,
+            "floor_pct_of_p50_revenue": 90.0,
+            "cap_pct_of_p50_revenue": 110.0
+          },
           "capex": {
             "lines": [
               {
                 "Item": "EPC (modules + BOS + installation)",
-                "Amount_COP": 3800000000.0,
+                "Amount_COP": 157865000000.0,
+                "Phase": "Construction"
+              },
+              {
+                "Item": "Interconnection / Substation / Line",
+                "Amount_COP": 25000000000.0,
+                "Phase": "Construction"
+              },
+              {
+                "Item": "Development costs",
+                "Amount_COP": 5155000000.0,
+                "Phase": "Development"
+              },
+              {
+                "Item": "Studies and Analysis",
+                "Amount_COP": 7241000000.0,
+                "Phase": "Construction"
+              },
+              {
+                "Item": "Installation",
+                "Amount_COP": 43097000000.0,
+                "Phase": "Construction"
+              },
+              {
+                "Item": "Land Preparation",
+                "Amount_COP": 17148000000.0,
+                "Phase": "Construction"
+              },
+              {
+                "Item": "Development Fee",
+                "Amount_COP": 22000000000.0,
+                "Phase": "Construction"
+              },
+              {
+                "Item": "Insurance",
+                "Amount_COP": 2300000000.0,
+                "Phase": "Construction"
+              },
+              {
+                "Item": "Management",
+                "Amount_COP": 47847000000.0,
+                "Phase": "Construction"
+              },
+              {
+                "Item": "Contingency",
+                "Amount_COP": 29825000000.0,
+                "Phase": "Construction"
+              }
+            ],
+            "distribution": "Straight-line (monthly)"
+          },
+          "opex": {
+            "fixed_om_cop_per_mwac_year": 8000000.0,
+            "fixed_om_indexation": "Colombia CPI",
+            "variable_om_cop_per_mwh": 12000.0,
+            "variable_om_indexation": "Colombia CPI",
+            "insurance_cop_per_mwac_year": 10000000.0,
+            "insurance_indexation": "Colombia CPI",
+            "grid_fees_cop_per_mwh": 10520.0,
+            "land_hectares": 200.0,
+            "land_price_dev_cop_per_ha_year": 2000000.0,
+            "land_price_con_cop_per_ha_year": 6000000.0,
+            "land_price_op_cop_per_ha_year": 6000000.0,
+            "land_indexation": "Colombia CPI",
+            "ica_pct_of_revenue": 0.22,
+            "gmf_pct_of_outflows": 0.4,
+            "other_items": [
+              {
+                "Item": "Other OPEX item",
+                "Amount_COP_per_year": 0.0,
+                "Phase": "Operation",
+                "Indexation": "Colombia CPI"
+              }
+            ]
+          },
+          "sga": {
+            "items": [
+              {
+                "Item": "Project management / Owner team",
+                "Amount_COP_per_year": 1500000000.0,
+                "Phase": "Development",
+                "Indexation": "Colombia CPI"
+              },
+              {
+                "Item": "Permitting / legal / compliance",
+                "Amount_COP_per_year": 500000000.0,
+                "Phase": "Development",
+                "Indexation": "Colombia CPI"
+              },
+              {
+                "Item": "Corporate overhead allocation",
+                "Amount_COP_per_year": 1500000000.0,
+                "Phase": "Construction",
+                "Indexation": "Colombia CPI"
+              },
+              {
+                "Item": "Overhead",
+                "Amount_COP_per_year": 1500000000.0,
+                "Phase": "Operation",
+                "Indexation": "Colombia CPI"
+              }
+            ]
+          },
+          "depreciation": {
+            "pct_of_capex_depreciated": 100.0,
+            "dep_years": 3
+          },
+          "tax": {
+            "corporate_tax_rate_pct": 35.0,
+            "allow_loss_carryforward": true
+          },
+          "wc": {
+            "ar_days": 90,
+            "ap_days": 30,
+            "apply_ap_to_opex": true,
+            "apply_ap_to_sga": true
+          },
+          "debt": {
+            "enabled": false,
+            "debt_pct_of_capex": 70.0,
+            "tenor_years": 7,
+            "grace_years": 1,
+            "base_rate_pct": 9.0,
+            "margin_pct": 2.5,
+            "upfront_fee_bps": 175.0,
+            "commitment_fee_pct_of_margin": 30.0,
+            "target_dscr": 1.2,
+            "min_dscr_covenant": 1.2,
+            "lockup_dscr": 1.15,
+            "amortization_type": "Sculpted to DSCR",
+            "balloon_pct": 0.0
+          },
+          "renewable_tax": {
+            "enable_special_deduction": true,
+            "special_deduction_pct_of_capex": 50.0,
+            "special_deduction_years": 15,
+            "enable_vat_refund": true,
+            "vat_refund_mode": "percent",
+            "vat_pct_of_capex": 19.0,
+            "vat_fixed_cop": 0.0,
+            "vat_refund_year": 1
+          },
+          "incentives": {
+            "enable_special_deduction": true,
+            "special_deduction_pct_of_capex": 50.0,
+            "special_deduction_years": 15,
+            "special_deduction_max_pct_of_taxable_income": 50.0,
+            "vat_mode": "Excluded",
+            "vat_pct_of_capex": 0.0,
+            "vat_fixed_cop": 0.0,
+            "vat_refund_year_index": 1
+          },
+          "uploaded_files": {
+            "generation": [],
+            "revenues": [],
+            "capex": [],
+            "opex": []
+          }
+        },
+        "Basev2": {
+          "name": "Basev2",
+          "project_overview": {
+            "project_name": "",
+            "country": "",
+            "region_department": "",
+            "technology": "",
+            "installed_capacity_mw": 0.0,
+            "short_description": "",
+            "optional_notes": ""
+          },
+          "macro": {
+            "col_cpi": 6.0,
+            "col_ppi": 5.0,
+            "us_cpi": 3.0,
+            "custom_index_rate": 5.0,
+            "fx_cop_per_usd_start": 4000.0,
+            "fx_method": "Inflation differential (PPP approx.)",
+            "fx_flat": 4000.0
+          },
+          "timeline": {
+            "start_date": "2026-01-11",
+            "dev_months": 18,
+            "capex_months": 12,
+            "operation_years": 25
+          },
+          "generation": {
+            "mwac": 100.0,
+            "mwp": 130.0,
+            "p50_mwh_yr": 220000.0,
+            "p75_mwh_yr": 210000.0,
+            "p90_mwh_yr": 200000.0,
+            "production_choice": "P50",
+            "degradation_pct": 0.5
+          },
+          "revenue_mode": "Standard PPA Parameters",
+          "revenue1": {
+            "ppa_price_cop_per_kwh": 320.0,
+            "ppa_term_years": 12,
+            "merchant_price_cop_per_kwh": 250.0,
+            "indexation": "Colombia CPI"
+          },
+          "revenue2": {
+            "prices_constant_cop_per_kwh": {
+              "1": 300.0,
+              "2": 300.0,
+              "3": 300.0,
+              "4": 300.0,
+              "5": 300.0,
+              "6": 300.0,
+              "7": 300.0,
+              "8": 300.0,
+              "9": 300.0,
+              "10": 300.0,
+              "11": 300.0,
+              "12": 300.0,
+              "13": 300.0,
+              "14": 300.0,
+              "15": 300.0,
+              "16": 300.0,
+              "17": 300.0,
+              "18": 300.0,
+              "19": 300.0,
+              "20": 300.0,
+              "21": 300.0,
+              "22": 300.0,
+              "23": 300.0,
+              "24": 300.0,
+              "25": 300.0
+            },
+            "indexation": "Colombia CPI"
+          },
+          "ppa_contract": {
+            "type_id": "pay_as_generated_100",
+            "ui_label_es": "Pague lo generado (100%)",
+            "ui_label_en": "Pay-as-Generated (100%)",
+            "cap_mode": "% de P50",
+            "cap_value": 100.0,
+            "excess_treatment": "Spot",
+            "excess_discount_pct": 80.0,
+            "block_mode": "% de P50",
+            "block_value": 100.0,
+            "settlement_price_mode": "Spot (promedio)",
+            "settlement_price_fixed": 0.0,
+            "floor_pct_of_p50_revenue": 90.0,
+            "cap_pct_of_p50_revenue": 110.0
+          },
+          "capex": {
+            "lines": [
+              {
+                "Item": "EPC (modules + BOS + installation)",
+                "Amount_COP": 0.0,
                 "Phase": "Construction"
               },
               {
@@ -326,30 +605,25 @@
                 "Item": "Development costs",
                 "Amount_COP": 0.0,
                 "Phase": "Development"
-              },
-              {
-                "Item": "Land Preparation",
-                "Amount_COP": 744000000.0,
-                "Phase": "Construction"
               }
             ],
             "distribution": "Straight-line (monthly)"
           },
           "opex": {
-            "fixed_om_cop_per_mwac_year": 185000000.0,
-            "fixed_om_indexation": "Colombia PPI",
+            "fixed_om_cop_per_mwac_year": 0.0,
+            "fixed_om_indexation": "Colombia CPI",
             "variable_om_cop_per_mwh": 0.0,
             "variable_om_indexation": "Colombia CPI",
             "insurance_cop_per_mwac_year": 0.0,
-            "insurance_indexation": "Custom",
+            "insurance_indexation": "Colombia CPI",
             "grid_fees_cop_per_mwh": 0.0,
             "land_hectares": 0.0,
             "land_price_dev_cop_per_ha_year": 0.0,
             "land_price_con_cop_per_ha_year": 0.0,
             "land_price_op_cop_per_ha_year": 0.0,
             "land_indexation": "Colombia CPI",
-            "ica_pct_of_revenue": 0.7,
-            "gmf_pct_of_outflows": 0.39,
+            "ica_pct_of_revenue": 0.0,
+            "gmf_pct_of_outflows": 0.4,
             "other_items": [
               {
                 "Item": "Other OPEX item",
@@ -383,7 +657,7 @@
           },
           "depreciation": {
             "pct_of_capex_depreciated": 100.0,
-            "dep_years": 25
+            "dep_years": 20
           },
           "tax": {
             "corporate_tax_rate_pct": 35.0,
@@ -392,22 +666,235 @@
           "wc": {
             "ar_days": 90,
             "ap_days": 60,
-            "apply_ap_to_opex": false,
-            "apply_ap_to_sga": false
+            "apply_ap_to_opex": true,
+            "apply_ap_to_sga": true
           },
           "debt": {
             "enabled": true,
-            "debt_pct_of_capex": 90.0,
-            "tenor_years": 10,
-            "grace_years": 1,
+            "debt_pct_of_capex": 70.0,
+            "tenor_years": 7,
+            "grace_years": 0,
             "base_rate_pct": 9.0,
-            "margin_pct": 2.0,
+            "margin_pct": 7.0,
             "upfront_fee_bps": 175.0,
             "commitment_fee_pct_of_margin": 30.0,
             "target_dscr": 1.2,
             "min_dscr_covenant": 1.2,
             "lockup_dscr": 1.15,
-            "amortization_type": "Equal principal",
+            "amortization_type": "Sculpted to DSCR",
+            "balloon_pct": 32.0
+          },
+          "renewable_tax": {
+            "enable_special_deduction": true,
+            "special_deduction_pct_of_capex": 50.0,
+            "special_deduction_years": 15,
+            "enable_vat_refund": true,
+            "vat_refund_mode": "percent",
+            "vat_pct_of_capex": 19.0,
+            "vat_fixed_cop": 0.0,
+            "vat_refund_year": 1
+          },
+          "incentives": {
+            "enable_special_deduction": true,
+            "special_deduction_pct_of_capex": 50.0,
+            "special_deduction_years": 15,
+            "special_deduction_max_pct_of_taxable_income": 50.0,
+            "vat_mode": "Excluded",
+            "vat_pct_of_capex": 0.0,
+            "vat_fixed_cop": 0.0,
+            "vat_refund_year_index": 1
+          },
+          "uploaded_files": {
+            "generation": [],
+            "revenues": [],
+            "capex": [],
+            "opex": []
+          }
+        }
+      }
+    },
+    "CI Bulk - La Veranera 1 - Phoenix": {
+      "scenarios": {
+        "Base": {
+          "name": "Base",
+          "project_overview": {
+            "project_name": "",
+            "country": "",
+            "region_department": "",
+            "technology": "",
+            "installed_capacity_mw": 0.0,
+            "short_description": "",
+            "optional_notes": ""
+          },
+          "macro": {
+            "col_cpi": 6.0,
+            "col_ppi": 5.0,
+            "us_cpi": 3.0,
+            "custom_index_rate": 5.0,
+            "fx_cop_per_usd_start": 4000.0,
+            "fx_method": "Inflation differential (PPP approx.)",
+            "fx_flat": 4000.0
+          },
+          "timeline": {
+            "start_date": "2026-01-04",
+            "dev_months": 18,
+            "capex_months": 12,
+            "operation_years": 25
+          },
+          "generation": {
+            "mwac": 100.0,
+            "mwp": 130.0,
+            "p50_mwh_yr": 220000.0,
+            "p75_mwh_yr": 210000.0,
+            "p90_mwh_yr": 200000.0,
+            "production_choice": "P50",
+            "degradation_pct": 0.5
+          },
+          "revenue_mode": "Standard PPA Parameters",
+          "revenue1": {
+            "ppa_price_cop_per_kwh": 320.0,
+            "ppa_term_years": 12,
+            "merchant_price_cop_per_kwh": 250.0,
+            "indexation": "Colombia CPI"
+          },
+          "revenue2": {
+            "prices_constant_cop_per_kwh": {
+              "1": 300.0,
+              "2": 300.0,
+              "3": 300.0,
+              "4": 300.0,
+              "5": 300.0,
+              "6": 300.0,
+              "7": 300.0,
+              "8": 300.0,
+              "9": 300.0,
+              "10": 300.0,
+              "11": 300.0,
+              "12": 300.0,
+              "13": 300.0,
+              "14": 300.0,
+              "15": 300.0,
+              "16": 300.0,
+              "17": 300.0,
+              "18": 300.0,
+              "19": 300.0,
+              "20": 300.0,
+              "21": 300.0,
+              "22": 300.0,
+              "23": 300.0,
+              "24": 300.0,
+              "25": 300.0
+            },
+            "indexation": "Colombia CPI"
+          },
+          "ppa_contract": {
+            "type_id": "pay_as_generated_100",
+            "ui_label_es": "Pague lo generado (100%)",
+            "ui_label_en": "Pay-as-Generated (100%)",
+            "cap_mode": "% de P50",
+            "cap_value": 100.0,
+            "excess_treatment": "Spot",
+            "excess_discount_pct": 80.0,
+            "block_mode": "% de P50",
+            "block_value": 100.0,
+            "settlement_price_mode": "Spot (promedio)",
+            "settlement_price_fixed": 0.0,
+            "floor_pct_of_p50_revenue": 90.0,
+            "cap_pct_of_p50_revenue": 110.0
+          },
+          "capex": {
+            "lines": [
+              {
+                "Item": "EPC (modules + BOS + installation)",
+                "Amount_COP": 0.0,
+                "Phase": "Construction"
+              },
+              {
+                "Item": "Interconnection / Substation / Line",
+                "Amount_COP": 0.0,
+                "Phase": "Construction"
+              },
+              {
+                "Item": "Development costs",
+                "Amount_COP": 0.0,
+                "Phase": "Development"
+              }
+            ],
+            "distribution": "Straight-line (monthly)"
+          },
+          "opex": {
+            "fixed_om_cop_per_mwac_year": 0.0,
+            "fixed_om_indexation": "Colombia CPI",
+            "variable_om_cop_per_mwh": 0.0,
+            "variable_om_indexation": "Colombia CPI",
+            "insurance_cop_per_mwac_year": 0.0,
+            "insurance_indexation": "Colombia CPI",
+            "grid_fees_cop_per_mwh": 0.0,
+            "land_hectares": 0.0,
+            "land_price_dev_cop_per_ha_year": 0.0,
+            "land_price_con_cop_per_ha_year": 0.0,
+            "land_price_op_cop_per_ha_year": 0.0,
+            "land_indexation": "Colombia CPI",
+            "ica_pct_of_revenue": 0.0,
+            "gmf_pct_of_outflows": 0.4,
+            "other_items": [
+              {
+                "Item": "Other OPEX item",
+                "Amount_COP_per_year": 0.0,
+                "Phase": "Operation",
+                "Indexation": "Colombia CPI"
+              }
+            ]
+          },
+          "sga": {
+            "items": [
+              {
+                "Item": "Project management / Owner team",
+                "Amount_COP_per_year": 0.0,
+                "Phase": "Development",
+                "Indexation": "Colombia CPI"
+              },
+              {
+                "Item": "Permitting / legal / compliance",
+                "Amount_COP_per_year": 0.0,
+                "Phase": "Development",
+                "Indexation": "Colombia CPI"
+              },
+              {
+                "Item": "Corporate overhead allocation",
+                "Amount_COP_per_year": 0.0,
+                "Phase": "Operation",
+                "Indexation": "Colombia CPI"
+              }
+            ]
+          },
+          "depreciation": {
+            "pct_of_capex_depreciated": 100.0,
+            "dep_years": 20
+          },
+          "tax": {
+            "corporate_tax_rate_pct": 35.0,
+            "allow_loss_carryforward": true
+          },
+          "wc": {
+            "ar_days": 90,
+            "ap_days": 60,
+            "apply_ap_to_opex": true,
+            "apply_ap_to_sga": true
+          },
+          "debt": {
+            "enabled": false,
+            "debt_pct_of_capex": 70.0,
+            "tenor_years": 7,
+            "grace_years": 0,
+            "base_rate_pct": 9.0,
+            "margin_pct": 7.0,
+            "upfront_fee_bps": 175.0,
+            "commitment_fee_pct_of_margin": 30.0,
+            "target_dscr": 1.2,
+            "min_dscr_covenant": 1.2,
+            "lockup_dscr": 1.15,
+            "amortization_type": "Sculpted to DSCR",
             "balloon_pct": 0.0
           },
           "renewable_tax": {
@@ -421,7 +908,7 @@
             "vat_refund_year": 1
           },
           "incentives": {
-            "enable_special_deduction": false,
+            "enable_special_deduction": true,
             "special_deduction_pct_of_capex": 50.0,
             "special_deduction_years": 15,
             "special_deduction_max_pct_of_taxable_income": 50.0,
@@ -429,35 +916,54 @@
             "vat_pct_of_capex": 0.0,
             "vat_fixed_cop": 0.0,
             "vat_refund_year_index": 1
+          },
+          "uploaded_files": {
+            "generation": [],
+            "revenues": [],
+            "capex": [],
+            "opex": []
           }
-        },
-        "Cliente - Dec 2025 - Ajustado V1": {
-          "name": "Cliente - Dec 2025 - Ajustado V1",
+        }
+      }
+    },
+    "CI Bulk - Inducoque 1 - Crystal": {
+      "scenarios": {
+        "Base - Tecnosolar 900Kwac": {
+          "name": "Base - Tecnosolar 900Kwac",
+          "project_overview": {
+            "project_name": "CIBulk - Inducoque 900KWac",
+            "country": "Colombia",
+            "region_department": "Norte de Santander",
+            "technology": "Solar",
+            "installed_capacity_mw": 0.9,
+            "short_description": "Proyecto Crystal - Inducoque 1 - 900Kwac - Usando PVSyst Tecnosolar\n",
+            "optional_notes": ""
+          },
           "macro": {
-            "col_cpi": 4.800000000000004,
+            "col_cpi": 5.5,
             "col_ppi": 5.0,
-            "us_cpi": 3.0,
-            "custom_index_rate": 7.4,
-            "fx_cop_per_usd_start": 3900.0,
+            "us_cpi": 2.5,
+            "custom_index_rate": 7.0,
+            "fx_cop_per_usd_start": 3700.0,
             "fx_method": "Inflation differential (PPP approx.)",
             "fx_flat": 4000.0
           },
           "timeline": {
-            "start_date": "2025-12-28",
+            "start_date": "2026-02-01",
             "dev_months": 1,
-            "capex_months": 7,
+            "capex_months": 8,
             "operation_years": 25
           },
           "generation": {
-            "mwac": 1.0,
-            "mwp": 1.3,
-            "p50_mwh_yr": 1844.0,
-            "p75_mwh_yr": 1.0,
-            "p90_mwh_yr": 1679.7,
+            "mwac": 0.9,
+            "mwp": 1.278,
+            "p50_mwh_yr": 1853.9,
+            "p75_mwh_yr": 1700.0,
+            "p90_mwh_yr": 1689.0,
             "production_choice": "P50",
             "degradation_pct": 0.5
           },
-          "revenue_mode": "Standard PPA Parameters",
+          "revenue_mode": "Manual annual series",
           "revenue1": {
             "ppa_price_cop_per_kwh": 320.0,
             "ppa_term_years": 12,
@@ -473,8 +979,8 @@
               "5": 300.0,
               "6": 295.0,
               "7": 290.0,
-              "8": 285.0,
-              "9": 275.0,
+              "8": 280.0,
+              "9": 270.0,
               "10": 270.0,
               "11": 270.0,
               "12": 270.0,
@@ -492,18 +998,33 @@
               "24": 270.0,
               "25": 270.0
             },
-            "indexation": "Colombia CPI"
+            "indexation": "Colombia PPI"
+          },
+          "ppa_contract": {
+            "type_id": "pay_as_generated_100",
+            "ui_label_es": "Pague lo generado (100%)",
+            "ui_label_en": "Pay-as-Generated (100%)",
+            "cap_mode": "% de P50",
+            "cap_value": 100.0,
+            "excess_treatment": "Spot",
+            "excess_discount_pct": 80.0,
+            "block_mode": "% de P50",
+            "block_value": 100.0,
+            "settlement_price_mode": "Spot (promedio)",
+            "settlement_price_fixed": 0.0,
+            "floor_pct_of_p50_revenue": 90.0,
+            "cap_pct_of_p50_revenue": 110.0
           },
           "capex": {
             "lines": [
               {
                 "Item": "EPC (modules + BOS + installation)",
-                "Amount_COP": 3800000000.0,
+                "Amount_COP": 808820400.0,
                 "Phase": "Construction"
               },
               {
                 "Item": "Interconnection / Substation / Line",
-                "Amount_COP": 0.0,
+                "Amount_COP": 1310930000.0,
                 "Phase": "Construction"
               },
               {
@@ -512,15 +1033,50 @@
                 "Phase": "Development"
               },
               {
+                "Item": "Estructura",
+                "Amount_COP": 396180000.0,
+                "Phase": "Construction"
+              },
+              {
+                "Item": "Obra Civil",
+                "Amount_COP": 252532650.0,
+                "Phase": "Construction"
+              },
+              {
+                "Item": "Instalacion y Montaje",
+                "Amount_COP": 242820000.0,
+                "Phase": "Construction"
+              },
+              {
+                "Item": "Estudios y Tramites",
+                "Amount_COP": 61203100.0,
+                "Phase": "Construction"
+              },
+              {
+                "Item": "Vigilancia y Seguridad",
+                "Amount_COP": 61800000.0,
+                "Phase": "Construction"
+              },
+              {
+                "Item": "Costos Indirectos",
+                "Amount_COP": 58991734.0,
+                "Phase": "Construction"
+              },
+              {
+                "Item": "AIU EPC",
+                "Amount_COP": 606722800.0,
+                "Phase": "Construction"
+              },
+              {
                 "Item": "Land Preparation",
-                "Amount_COP": 744000000.0,
+                "Amount_COP": 190000000.0,
                 "Phase": "Construction"
               }
             ],
             "distribution": "Straight-line (monthly)"
           },
           "opex": {
-            "fixed_om_cop_per_mwac_year": 100000000.0,
+            "fixed_om_cop_per_mwac_year": 80000000.0,
             "fixed_om_indexation": "Colombia CPI",
             "variable_om_cop_per_mwh": 0.0,
             "variable_om_indexation": "Colombia CPI",
@@ -581,7 +1137,7 @@
           },
           "debt": {
             "enabled": false,
-            "debt_pct_of_capex": 90.0,
+            "debt_pct_of_capex": 70.0,
             "tenor_years": 7,
             "grace_years": 0,
             "base_rate_pct": 9.0,
@@ -613,49 +1169,75 @@
             "vat_pct_of_capex": 0.0,
             "vat_fixed_cop": 0.0,
             "vat_refund_year_index": 1
+          },
+          "uploaded_files": {
+            "generation": [
+              {
+                "filename": "SIMULACION_CRYSTAL-1167701_CAPRICORN-1167702.pdf",
+                "filepath": "data\\CI Bulk - Inducoque 1 - Crystal\\Base - Tecnosolar 900Kwac\\generation\\uploads\\SIMULACION_CRYSTAL-1167701_CAPRICORN-1167702.pdf",
+                "upload_date": "2026-01-13T19:07:52.874497",
+                "file_size": "1886517"
+              }
+            ],
+            "revenues": [],
+            "capex": [
+              {
+                "filename": "PRESUPUESTO DESGLOZADO INDUCOQUE (8).pdf",
+                "filepath": "data\\CI Bulk - Inducoque 1 - Crystal\\Base - Tecnosolar 900Kwac\\capex\\uploads\\PRESUPUESTO DESGLOZADO INDUCOQUE (8).pdf",
+                "upload_date": "2026-01-13T19:15:25.551624",
+                "file_size": "35419"
+              },
+              {
+                "filename": "COTIZACION INDUCOKE 2026.pdf",
+                "filepath": "data\\CI Bulk - Inducoque 1 - Crystal\\Base - Tecnosolar 900Kwac\\capex\\uploads\\COTIZACION INDUCOKE 2026.pdf",
+                "upload_date": "2026-01-13T19:15:36.168298",
+                "file_size": "225412"
+              }
+            ],
+            "opex": []
           }
         },
-        "Delphi - Base Case v1": {
-          "name": "Delphi - Base Case v1",
+        "Copy of Base - Tecnosolar 900Kwac": {
+          "name": "Copy of Base - Tecnosolar 900Kwac",
           "project_overview": {
-            "project_name": "CI Bulk - La Veranera",
+            "project_name": "CIBulk - Inducoque 900KWac",
             "country": "Colombia",
             "region_department": "Norte de Santander",
             "technology": "Solar",
-            "installed_capacity_mw": 1.0,
-            "short_description": "",
+            "installed_capacity_mw": 0.9,
+            "short_description": "Proyecto Crystal - Inducoque 1 - 900Kwac - Usando PVSyst Tecnosolar\n",
             "optional_notes": ""
           },
           "macro": {
-            "col_cpi": 5.3000000000000025,
-            "col_ppi": 3.0,
-            "us_cpi": 2.7,
-            "custom_index_rate": 6.0,
-            "fx_cop_per_usd_start": 3800.0,
+            "col_cpi": 5.5,
+            "col_ppi": 5.0,
+            "us_cpi": 2.5,
+            "custom_index_rate": 7.0,
+            "fx_cop_per_usd_start": 3700.0,
             "fx_method": "Inflation differential (PPP approx.)",
             "fx_flat": 4000.0
           },
           "timeline": {
-            "start_date": "2026-01-05",
+            "start_date": "2026-02-01",
             "dev_months": 1,
-            "capex_months": 7,
+            "capex_months": 8,
             "operation_years": 25
           },
           "generation": {
-            "mwac": 1.0,
-            "mwp": 1.3,
-            "p50_mwh_yr": 1900.0,
-            "p75_mwh_yr": 1.0,
-            "p90_mwh_yr": 1600.0,
+            "mwac": 0.9,
+            "mwp": 1.278,
+            "p50_mwh_yr": 1853.9,
+            "p75_mwh_yr": 1700.0,
+            "p90_mwh_yr": 1689.0,
             "production_choice": "P50",
             "degradation_pct": 0.5
           },
           "revenue_mode": "Manual annual series",
           "revenue1": {
-            "ppa_price_cop_per_kwh": 300.0,
-            "ppa_term_years": 25,
+            "ppa_price_cop_per_kwh": 320.0,
+            "ppa_term_years": 12,
             "merchant_price_cop_per_kwh": 250.0,
-            "indexation": "Colombia PPI"
+            "indexation": "Colombia CPI"
           },
           "revenue2": {
             "prices_constant_cop_per_kwh": {
@@ -666,8 +1248,8 @@
               "5": 300.0,
               "6": 295.0,
               "7": 290.0,
-              "8": 285.0,
-              "9": 275.0,
+              "8": 280.0,
+              "9": 270.0,
               "10": 270.0,
               "11": 270.0,
               "12": 270.0,
@@ -685,12 +1267,12 @@
               "24": 270.0,
               "25": 270.0
             },
-            "indexation": "Colombia CPI"
+            "indexation": "Colombia PPI"
           },
           "ppa_contract": {
-            "type_id": "fixed_block",
-            "ui_label_es": "Bloque de energía fijo",
-            "ui_label_en": "Fixed Energy Block (Baseload)",
+            "type_id": "pay_as_generated_100",
+            "ui_label_es": "Pague lo generado (100%)",
+            "ui_label_en": "Pay-as-Generated (100%)",
             "cap_mode": "% de P50",
             "cap_value": 100.0,
             "excess_treatment": "Spot",
@@ -706,12 +1288,12 @@
             "lines": [
               {
                 "Item": "EPC (modules + BOS + installation)",
-                "Amount_COP": 3800000000.0,
+                "Amount_COP": 808820400.0,
                 "Phase": "Construction"
               },
               {
                 "Item": "Interconnection / Substation / Line",
-                "Amount_COP": 0.0,
+                "Amount_COP": 1310930000.0,
                 "Phase": "Construction"
               },
               {
@@ -720,13 +1302,43 @@
                 "Phase": "Development"
               },
               {
-                "Item": "Land preparation",
-                "Amount_COP": 744000000.0,
+                "Item": "Estructura",
+                "Amount_COP": 396180000.0,
                 "Phase": "Construction"
               },
               {
-                "Item": "Others",
-                "Amount_COP": 0.0,
+                "Item": "Obra Civil",
+                "Amount_COP": 252532650.0,
+                "Phase": "Construction"
+              },
+              {
+                "Item": "Instalacion y Montaje",
+                "Amount_COP": 242820000.0,
+                "Phase": "Construction"
+              },
+              {
+                "Item": "Estudios y Tramites",
+                "Amount_COP": 61203100.0,
+                "Phase": "Construction"
+              },
+              {
+                "Item": "Vigilancia y Seguridad",
+                "Amount_COP": 61800000.0,
+                "Phase": "Construction"
+              },
+              {
+                "Item": "Costos Indirectos",
+                "Amount_COP": 58991734.0,
+                "Phase": "Construction"
+              },
+              {
+                "Item": "AIU EPC",
+                "Amount_COP": 362036924.0,
+                "Phase": "Construction"
+              },
+              {
+                "Item": "Land Preparation",
+                "Amount_COP": 190000000.0,
                 "Phase": "Construction"
               }
             ],
@@ -779,7 +1391,7 @@
             ]
           },
           "depreciation": {
-            "pct_of_capex_depreciated": 80.0,
+            "pct_of_capex_depreciated": 100.0,
             "dep_years": 3
           },
           "tax": {
@@ -793,12 +1405,12 @@
             "apply_ap_to_sga": true
           },
           "debt": {
-            "enabled": true,
-            "debt_pct_of_capex": 40.0,
+            "enabled": false,
+            "debt_pct_of_capex": 70.0,
             "tenor_years": 7,
-            "grace_years": 1,
+            "grace_years": 0,
             "base_rate_pct": 9.0,
-            "margin_pct": 2.0,
+            "margin_pct": 7.0,
             "upfront_fee_bps": 175.0,
             "commitment_fee_pct_of_margin": 30.0,
             "target_dscr": 1.2,
@@ -828,10 +1440,297 @@
             "vat_refund_year_index": 1
           },
           "uploaded_files": {
-            "generation": [],
-            "capex": [],
-            "opex": [],
-            "revenues": []
+            "generation": [
+              {
+                "filename": "SIMULACION_CRYSTAL-1167701_CAPRICORN-1167702.pdf",
+                "filepath": "data\\CI Bulk - Inducoque 1 - Crystal\\Base - Tecnosolar 900Kwac\\generation\\uploads\\SIMULACION_CRYSTAL-1167701_CAPRICORN-1167702.pdf",
+                "upload_date": "2026-01-13T19:07:52.874497",
+                "file_size": "1886517"
+              }
+            ],
+            "revenues": [],
+            "capex": [
+              {
+                "filename": "PRESUPUESTO DESGLOZADO INDUCOQUE (8).pdf",
+                "filepath": "data\\CI Bulk - Inducoque 1 - Crystal\\Base - Tecnosolar 900Kwac\\capex\\uploads\\PRESUPUESTO DESGLOZADO INDUCOQUE (8).pdf",
+                "upload_date": "2026-01-13T19:15:25.551624",
+                "file_size": "35419"
+              },
+              {
+                "filename": "COTIZACION INDUCOKE 2026.pdf",
+                "filepath": "data\\CI Bulk - Inducoque 1 - Crystal\\Base - Tecnosolar 900Kwac\\capex\\uploads\\COTIZACION INDUCOKE 2026.pdf",
+                "upload_date": "2026-01-13T19:15:36.168298",
+                "file_size": "225412"
+              }
+            ],
+            "opex": []
+          }
+        }
+      }
+    },
+    "CI Bulk - La Veranera 1 - Poseidon": {
+      "scenarios": {
+        "Base": {
+          "name": "Base",
+          "project_overview": {
+            "project_name": "CI Bulk - La Veranera - Poseidon - 0.9 MWac",
+            "country": "Colombia",
+            "region_department": "Norte de Santander",
+            "technology": "Solar",
+            "installed_capacity_mw": 0.9,
+            "short_description": "Presupuesto Tecnosolar\n",
+            "optional_notes": ""
+          },
+          "macro": {
+            "col_cpi": 5.5,
+            "col_ppi": 5.0,
+            "us_cpi": 2.5,
+            "custom_index_rate": 7.0,
+            "fx_cop_per_usd_start": 3700.0,
+            "fx_method": "Inflation differential (PPP approx.)",
+            "fx_flat": 4000.0
+          },
+          "timeline": {
+            "start_date": "2026-02-01",
+            "dev_months": 1,
+            "capex_months": 8,
+            "operation_years": 25
+          },
+          "generation": {
+            "mwac": 0.9,
+            "mwp": 1.119,
+            "p50_mwh_yr": 1545.2,
+            "p75_mwh_yr": 1500.0,
+            "p90_mwh_yr": 1407.7,
+            "production_choice": "P50",
+            "degradation_pct": 0.5
+          },
+          "revenue_mode": "Manual annual series",
+          "revenue1": {
+            "ppa_price_cop_per_kwh": 320.0,
+            "ppa_term_years": 12,
+            "merchant_price_cop_per_kwh": 250.0,
+            "indexation": "Colombia CPI"
+          },
+          "revenue2": {
+            "prices_constant_cop_per_kwh": {
+              "1": 340.0,
+              "2": 330.0,
+              "3": 320.0,
+              "4": 310.0,
+              "5": 300.0,
+              "6": 295.0,
+              "7": 290.0,
+              "8": 280.0,
+              "9": 270.0,
+              "10": 270.0,
+              "11": 270.0,
+              "12": 270.0,
+              "13": 270.0,
+              "14": 270.0,
+              "15": 270.0,
+              "16": 270.0,
+              "17": 270.0,
+              "18": 270.0,
+              "19": 270.0,
+              "20": 270.0,
+              "21": 270.0,
+              "22": 270.0,
+              "23": 270.0,
+              "24": 270.0,
+              "25": 270.0
+            },
+            "indexation": "Colombia CPI"
+          },
+          "ppa_contract": {
+            "type_id": "pay_as_generated_100",
+            "ui_label_es": "Pague lo generado (100%)",
+            "ui_label_en": "Pay-as-Generated (100%)",
+            "cap_mode": "% de P50",
+            "cap_value": 100.0,
+            "excess_treatment": "Spot",
+            "excess_discount_pct": 80.0,
+            "block_mode": "% de P50",
+            "block_value": 100.0,
+            "settlement_price_mode": "Spot (promedio)",
+            "settlement_price_fixed": 0.0,
+            "floor_pct_of_p50_revenue": 90.0,
+            "cap_pct_of_p50_revenue": 110.0
+          },
+          "capex": {
+            "lines": [
+              {
+                "Item": "EPC (modules + BOS + installation)",
+                "Amount_COP": 725855728.0,
+                "Phase": "Construction"
+              },
+              {
+                "Item": "Interconnection / Substation / Line",
+                "Amount_COP": 1310930000.0,
+                "Phase": "Construction"
+              },
+              {
+                "Item": "Development costs",
+                "Amount_COP": 0.0,
+                "Phase": "Development"
+              },
+              {
+                "Item": "Estructura",
+                "Amount_COP": 346877600.0,
+                "Phase": "Construction"
+              },
+              {
+                "Item": "Obra Civil",
+                "Amount_COP": 252532650.0,
+                "Phase": "Construction"
+              },
+              {
+                "Item": "Instalacion y Montaje",
+                "Amount_COP": 242820000.0,
+                "Phase": "Construction"
+              },
+              {
+                "Item": "Estudios y Tramites",
+                "Amount_COP": 61203110.0,
+                "Phase": "Construction"
+              },
+              {
+                "Item": "Vigilancia y Seguridad",
+                "Amount_COP": 61800000.0,
+                "Phase": "Construction"
+              },
+              {
+                "Item": "Costos Indirectos",
+                "Amount_COP": 58991734.0,
+                "Phase": "Construction"
+              },
+              {
+                "Item": "AIU EPC",
+                "Amount_COP": 581592056.0,
+                "Phase": "Construction"
+              },
+              {
+                "Item": "Land Preparation",
+                "Amount_COP": 335000000.0,
+                "Phase": "Construction"
+              }
+            ],
+            "distribution": "Straight-line (monthly)"
+          },
+          "opex": {
+            "fixed_om_cop_per_mwac_year": 80000000.0,
+            "fixed_om_indexation": "Colombia CPI",
+            "variable_om_cop_per_mwh": 0.0,
+            "variable_om_indexation": "Colombia CPI",
+            "insurance_cop_per_mwac_year": 0.0,
+            "insurance_indexation": "Colombia CPI",
+            "grid_fees_cop_per_mwh": 0.0,
+            "land_hectares": 0.0,
+            "land_price_dev_cop_per_ha_year": 0.0,
+            "land_price_con_cop_per_ha_year": 0.0,
+            "land_price_op_cop_per_ha_year": 0.0,
+            "land_indexation": "Colombia CPI",
+            "ica_pct_of_revenue": 0.7,
+            "gmf_pct_of_outflows": 0.4,
+            "other_items": [
+              {
+                "Item": "Other OPEX item",
+                "Amount_COP_per_year": 0.0,
+                "Phase": "Operation",
+                "Indexation": "Colombia CPI"
+              }
+            ]
+          },
+          "sga": {
+            "items": [
+              {
+                "Item": "Project management / Owner team",
+                "Amount_COP_per_year": 0.0,
+                "Phase": "Development",
+                "Indexation": "Colombia CPI"
+              },
+              {
+                "Item": "Permitting / legal / compliance",
+                "Amount_COP_per_year": 0.0,
+                "Phase": "Development",
+                "Indexation": "Colombia CPI"
+              },
+              {
+                "Item": "Corporate overhead allocation",
+                "Amount_COP_per_year": 0.0,
+                "Phase": "Operation",
+                "Indexation": "Colombia CPI"
+              }
+            ]
+          },
+          "depreciation": {
+            "pct_of_capex_depreciated": 100.0,
+            "dep_years": 3
+          },
+          "tax": {
+            "corporate_tax_rate_pct": 35.0,
+            "allow_loss_carryforward": true
+          },
+          "wc": {
+            "ar_days": 90,
+            "ap_days": 60,
+            "apply_ap_to_opex": true,
+            "apply_ap_to_sga": true
+          },
+          "debt": {
+            "enabled": false,
+            "debt_pct_of_capex": 70.0,
+            "tenor_years": 7,
+            "grace_years": 0,
+            "base_rate_pct": 9.0,
+            "margin_pct": 7.0,
+            "upfront_fee_bps": 175.0,
+            "commitment_fee_pct_of_margin": 30.0,
+            "target_dscr": 1.2,
+            "min_dscr_covenant": 1.2,
+            "lockup_dscr": 1.15,
+            "amortization_type": "Sculpted to DSCR",
+            "balloon_pct": 0.0
+          },
+          "renewable_tax": {
+            "enable_special_deduction": true,
+            "special_deduction_pct_of_capex": 50.0,
+            "special_deduction_years": 15,
+            "enable_vat_refund": true,
+            "vat_refund_mode": "percent",
+            "vat_pct_of_capex": 19.0,
+            "vat_fixed_cop": 0.0,
+            "vat_refund_year": 1
+          },
+          "incentives": {
+            "enable_special_deduction": true,
+            "special_deduction_pct_of_capex": 50.0,
+            "special_deduction_years": 15,
+            "special_deduction_max_pct_of_taxable_income": 50.0,
+            "vat_mode": "Excluded",
+            "vat_pct_of_capex": 0.0,
+            "vat_fixed_cop": 0.0,
+            "vat_refund_year_index": 1
+          },
+          "uploaded_files": {
+            "generation": [
+              {
+                "filename": "SIMULACION_PHOENIX-1167696_POSEIDON-1167699_Project.VC0-Report.pdf",
+                "filepath": "data\\CI Bulk - La Veranera 1 - Poseidon\\Base\\generation\\uploads\\SIMULACION_PHOENIX-1167696_POSEIDON-1167699_Project.VC0-Report.pdf",
+                "upload_date": "2026-01-13T19:44:43.745294",
+                "file_size": "1883449"
+              }
+            ],
+            "revenues": [],
+            "capex": [
+              {
+                "filename": "COTIZACION VERANERA 2026.pdf",
+                "filepath": "data\\CI Bulk - La Veranera 1 - Poseidon\\Base\\capex\\uploads\\COTIZACION VERANERA 2026.pdf",
+                "upload_date": "2026-01-13T19:50:14.614077",
+                "file_size": "229643"
+              }
+            ],
+            "opex": []
           }
         }
       }

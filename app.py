@@ -8,6 +8,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import shutil
 from dataclasses import dataclass, field, asdict
 from datetime import date, datetime
 from typing import Dict, List, Optional, Tuple
@@ -2385,17 +2386,21 @@ if not KALEIDO_AVAILABLE:
 # Display Delphi logo at top
 logo_path = _load_logo_image()
 if logo_path:
-    # Center the logo
+    # Center the logo and model title
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
         st.image(logo_path, width=400)
+        st.markdown(
+            "<p style='font-size: 1.4rem; font-weight: 700; text-align: center; margin-top: 0.5rem;'>"
+            "Delphi - Utility Scale Financial Model v1"
+            "</p>",
+            unsafe_allow_html=True,
+        )
     st.markdown("<br>", unsafe_allow_html=True)  # Add spacing
 elif os.path.exists("assets/images/LOGO V2.pdf"):
     # PDF exists but conversion failed - show helpful message
     st.info("💡 Logo file found but conversion failed. Please install PyMuPDF: `pip install PyMuPDF`")
 
-st.title("Delphi Utility-Scale Project Model (COP inputs, COP/USD outputs)")
-st.caption(f"Projects + scenarios stored at: {PROJECTS_FILE}")
 
 # User Manual Section
 with st.expander("How to Read This Model / Cómo Leer Este Modelo", expanded=False):
@@ -2569,6 +2574,104 @@ with st.sidebar:
         st.stop()
 
     proj = db["projects"].setdefault(project_name, {"scenarios": {}})
+    
+    # Delete project functionality with verification
+    if len(projects) > 0:
+        st.divider()
+        delete_confirm_key = f"delete_project_confirm_{project_name}"
+        
+        if delete_confirm_key not in st.session_state:
+            st.session_state[delete_confirm_key] = False
+        
+        if st.button("🗑️ Delete Project", type="secondary"):
+            st.session_state[delete_confirm_key] = True
+        
+        if st.session_state[delete_confirm_key]:
+            num_scenarios = len(proj.get("scenarios", {}))
+            st.warning(f"⚠️ Are you sure you want to delete '{project_name}'? This will delete {num_scenarios} scenario(s) and all associated data. This action cannot be undone.")
+            confirm_text = st.text_input("Type the project name to confirm:", key=f"delete_confirm_text_{project_name}")
+            col_confirm, col_cancel = st.columns(2)
+            with col_confirm:
+                if st.button("Yes, Delete", type="primary"):
+                    if confirm_text.strip().lower() == project_name.strip().lower():
+                        try:
+                            # Delete project from database
+                            del db["projects"][project_name]
+                            _save_db(db)
+                            
+                            # Clean up uploaded files in data directory
+                            safe_project = "".join(c for c in project_name if c.isalnum() or c in (' ', '-', '_')).strip()
+                            project_data_dir = os.path.join("data", safe_project)
+                            if os.path.exists(project_data_dir):
+                                try:
+                                    shutil.rmtree(project_data_dir)
+                                except Exception:
+                                    # Log error but continue - file cleanup is optional
+                                    pass
+                            
+                            st.session_state[delete_confirm_key] = False
+                            st.success(f"Project '{project_name}' deleted.")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Error deleting project: {str(e)}")
+                    else:
+                        st.error("Project name doesn't match. Deletion cancelled.")
+            with col_cancel:
+                if st.button("Cancel"):
+                    st.session_state[delete_confirm_key] = False
+                    st.rerun()
+        
+        st.divider()
+        
+        # Rename project functionality
+        rename_project_key = f"rename_project_{project_name}"
+        if rename_project_key not in st.session_state:
+            st.session_state[rename_project_key] = False
+        
+        if st.button("✏️ Rename Project", type="secondary"):
+            st.session_state[rename_project_key] = True
+        
+        if st.session_state[rename_project_key]:
+            new_project_name = st.text_input(
+                "New project name:",
+                value=project_name,
+                key=f"rename_project_input_{project_name}",
+            )
+            col_rename, col_cancel_rename = st.columns(2)
+            with col_rename:
+                if st.button("Rename", type="primary"):
+                    new_name = new_project_name.strip()
+                    if not new_name:
+                        st.error("Project name cannot be empty.")
+                    elif new_name == project_name:
+                        st.error("New name must be different from current name.")
+                    elif new_name in db["projects"]:
+                        st.error(f"Project '{new_name}' already exists.")
+                    else:
+                        try:
+                            # Rename in database
+                            db["projects"][new_name] = db["projects"].pop(project_name)
+                            _save_db(db)
+                            
+                            # Rename file directory
+                            old_safe = "".join(c for c in project_name if c.isalnum() or c in (' ', '-', '_')).strip()
+                            new_safe = "".join(c for c in new_name if c.isalnum() or c in (' ', '-', '_')).strip()
+                            old_dir = os.path.join("data", old_safe)
+                            new_dir = os.path.join("data", new_safe)
+                            if os.path.exists(old_dir) and not os.path.exists(new_dir):
+                                os.rename(old_dir, new_dir)
+                            
+                            st.session_state[rename_project_key] = False
+                            st.success(f"Project renamed to '{new_name}'.")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Error renaming project: {str(e)}")
+            with col_cancel_rename:
+                if st.button("Cancel rename"):
+                    st.session_state[rename_project_key] = False
+                    st.rerun()
+        
+        st.divider()
 
     scen_names = sorted(list(proj.get("scenarios", {}).keys()))
     scenario_name = st.selectbox("Scenario", ["(New scenario)"] + scen_names, index=0)
@@ -2585,15 +2688,86 @@ with st.sidebar:
     # Load scenario
     s = _scenario_from_dict(proj["scenarios"][scenario_name])
     s.name = scenario_name
-
+    
     st.divider()
-    cdel1, cdel2 = st.columns(2)
+    cdel1, cdel2, cdel3, cdel4 = st.columns(4)
     with cdel1:
         if st.button("Save scenario"):
             proj["scenarios"][scenario_name] = _scenario_to_dict(s)
             _save_db(db)
             st.success("Saved.")
     with cdel2:
+        if st.button("Duplicate scenario"):
+            # Generate new scenario name
+            base_name = f"Copy of {scenario_name}"
+            new_name = base_name
+            counter = 1
+            while new_name in proj["scenarios"]:
+                counter += 1
+                new_name = f"{base_name} {counter}"
+            
+            # Copy scenario data
+            new_scenario_dict = _scenario_to_dict(s)
+            new_scenario_dict["name"] = new_name
+            proj["scenarios"][new_name] = new_scenario_dict
+            _save_db(db)
+            st.success(f"Scenario duplicated as '{new_name}'")
+            st.rerun()
+    with cdel3:
+        rename_scenario_key = f"rename_scenario_{project_name}_{scenario_name}"
+        if rename_scenario_key not in st.session_state:
+            st.session_state[rename_scenario_key] = False
+        
+        if st.button("✏️ Rename scenario"):
+            st.session_state[rename_scenario_key] = True
+        
+        if st.session_state[rename_scenario_key]:
+            new_scenario_name = st.text_input(
+                "New scenario name:",
+                value=scenario_name,
+                key=f"rename_scenario_input_{project_name}_{scenario_name}",
+            )
+            col_s_rename, col_s_cancel = st.columns(2)
+            with col_s_rename:
+                if st.button("Rename scenario", type="primary"):
+                    new_name = new_scenario_name.strip()
+                    if not new_name:
+                        st.error("Scenario name cannot be empty.")
+                    elif new_name == scenario_name:
+                        st.error("New name must be different from current name.")
+                    elif new_name in proj["scenarios"]:
+                        st.error(f"Scenario '{new_name}' already exists in this project.")
+                    else:
+                        try:
+                            # Rename scenario in database
+                            proj["scenarios"][new_name] = proj["scenarios"].pop(scenario_name)
+                            
+                            # Update name field inside scenario data if present
+                            scen_dict = proj["scenarios"][new_name]
+                            if isinstance(scen_dict, dict) and "name" in scen_dict:
+                                scen_dict["name"] = new_name
+                            
+                            _save_db(db)
+                            
+                            # Rename scenario directory for uploads
+                            safe_project = "".join(c for c in project_name if c.isalnum() or c in (' ', '-', '_')).strip()
+                            old_safe_scen = "".join(c for c in scenario_name if c.isalnum() or c in (' ', '-', '_')).strip()
+                            new_safe_scen = "".join(c for c in new_name if c.isalnum() or c in (' ', '-', '_')).strip()
+                            old_scen_dir = os.path.join("data", safe_project, old_safe_scen)
+                            new_scen_dir = os.path.join("data", safe_project, new_safe_scen)
+                            if os.path.exists(old_scen_dir) and not os.path.exists(new_scen_dir):
+                                os.rename(old_scen_dir, new_scen_dir)
+                            
+                            st.session_state[rename_scenario_key] = False
+                            st.success(f"Scenario renamed to '{new_name}'.")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Error renaming scenario: {str(e)}")
+            with col_s_cancel:
+                if st.button("Cancel scenario rename"):
+                    st.session_state[rename_scenario_key] = False
+                    st.rerun()
+    with cdel4:
         if st.button("Delete scenario"):
             try:
                 del proj["scenarios"][scenario_name]
@@ -2606,6 +2780,10 @@ with st.sidebar:
     st.subheader("Compare")
     compare_scenarios = st.multiselect("Select scenarios", scen_names, default=[])
 
+# Title and Project/Scenario Names (after sidebar so variables are available)
+st.markdown(f"<p style='font-size: 1.3rem; font-weight: 600; color: #1f4e79;'><strong>Project Name:</strong> {project_name}</p>", unsafe_allow_html=True)
+st.markdown(f"<p style='font-size: 1.3rem; font-weight: 600; color: #1f4e79;'><strong>Scenario Name:</strong> {scenario_name}</p>", unsafe_allow_html=True)
+st.markdown("<br>", unsafe_allow_html=True)  # Add spacing
 
 # Tabs (top-down)
 tab_overview, tab_macro, tab_timeline, tab_gen, tab_rev, tab_capex, tab_opex, tab_sga, tab_dep, tab_incent, tab_ucf, tab_debt, tab_levered, tab_compare, tab_sensitivity, tab_summary = st.tabs(
@@ -6773,40 +6951,44 @@ def _setup_cashflow_sheet(ws, s, FORMULA_FILL, HEADER_FILL, HEADER_FONT, THIN_BO
         cell.border = THIN_BORDER
         cell.alignment = Alignment(horizontal="center")
     
-    # Helper cells for tax calculations (in row 1, columns beyond headers)
+    # Helper cells for tax calculations (in columns beyond data columns A-R and loop helpers W-AE)
+    # Using columns AF-AK for static helper values
     # Calculate COD month number for depreciation and tax benefit timing
     # COD occurs at the end of construction, so COD month = DevMonths + ConMonths
     # But depreciation starts in the first month of operation, which is COD month + 1
-    ws["Q1"] = "CODMonthNum"
-    ws["Q2"] = "=DevMonths+ConMonths"
-    ws["Q2"].fill = FORMULA_FILL
+    ws["AF1"] = "CODMonthNum"
+    ws["AF2"] = "=DevMonths+ConMonths"
+    ws["AF2"].fill = FORMULA_FILL
     
     # Total CAPEX for depreciation and tax benefits
-    ws["R1"] = "TotalCAPEX"
+    ws["AG1"] = "TotalCAPEX"
     # Use a specific range instead of entire column to avoid potential issues
-    ws["R2"] = f"=SUM(CAPEX_M!G2:G{max_rows+1})"
-    ws["R2"].fill = FORMULA_FILL
+    ws["AG2"] = f"=SUM(CAPEX_M!G2:G{max_rows+1})"
+    ws["AG2"].fill = FORMULA_FILL
     
     # Depreciation base and monthly amount
-    ws["S1"] = "DepBase"
-    ws["S2"] = "=R2*DepPct"  # Use R2 (TotalCAPEX) instead of named range
-    ws["S2"].fill = FORMULA_FILL
-    ws["T1"] = "MonthlyDep"
-    ws["T2"] = "=IF(DepYears>0,S2/(DepYears*12),0)"  # Use S2 instead of DepBase
-    ws["T2"].fill = FORMULA_FILL
+    ws["AH1"] = "DepBase"
+    ws["AH2"] = "=AG2*DepPct"  # Use AG2 (TotalCAPEX)
+    ws["AH2"].fill = FORMULA_FILL
+    ws["AI1"] = "MonthlyDep"
+    ws["AI2"] = "=IF(DepYears>0,AH2/(DepYears*12),0)"  # Use AH2 (DepBase)
+    ws["AI2"].fill = FORMULA_FILL
     
     # Special deduction pool
-    ws["U1"] = "SpecialDedPool"
-    ws["U2"] = "=IF(EnableSpecialDed=\"Yes\",R2*SpecialDedPct,0)"  # Use R2 instead of TotalCAPEX
-    ws["U2"].fill = FORMULA_FILL
+    ws["AJ1"] = "SpecialDedPool"
+    ws["AJ2"] = "=IF(EnableSpecialDed=\"Yes\",AG2*SpecialDedPct,0)"  # Use AG2 (TotalCAPEX)
+    ws["AJ2"].fill = FORMULA_FILL
     
     # Helper cells for VAT Refund target year calculation
     # Calculate target year once in row 2, then reference it
-    ws["V1"] = "VATTargetYear"
+    ws["AK1"] = "VATTargetYear"
     # Calculate target date: StartDate + (COD month + VATRefundYear - 1) months
-    # Use direct cell references: StartDate in Inputs!$B$8, DevMonths in Inputs!$B$9, ConMonths in Inputs!$B$10
-    ws["V2"] = "=YEAR(EDATE(Inputs!$B$8,Inputs!$B$9+Inputs!$B$10+VATRefundYear-1))"
-    ws["V2"].fill = FORMULA_FILL
+    # Use named ranges for cleaner formulas
+    ws["AK2"] = "=YEAR(EDATE(StartDate,DevMonths+ConMonths+VATRefundYear-1))"
+    ws["AK2"].fill = FORMULA_FILL
+    
+    # NOL Balance header (column AE tracks accumulated tax losses)
+    ws["AE1"] = "NOL_Balance"
     
     for row in range(2, max_rows + 1):
         # Basic references
@@ -6846,11 +7028,10 @@ def _setup_cashflow_sheet(ws, s, FORMULA_FILL, HEADER_FILL, HEADER_FONT, THIN_BO
         # Operation starts at month DevMonths+ConMonths+1 (COD month + 1)
         # Depreciation continues for DepYears*12 months from the start of operation
         # Use month number from Timeline_M column D (MonthNum)
-        # Depreciation - use direct cell references to avoid named range parsing issues
-        # DevMonths in Inputs!$B$9, ConMonths in Inputs!$B$10
+        # Depreciation - use named ranges for cleaner formulas
         # First operation month is DevMonths+ConMonths+1, so use >= to include it
-        # T2 contains the monthly depreciation amount (DepBase / (DepYears * 12))
-        ws[f"I{row}"] = f'=IF(AND(C{row}="Operation",Timeline_M!D{row}>=Inputs!$B$9+Inputs!$B$10+1,Timeline_M!D{row}<=Inputs!$B$9+Inputs!$B$10+DepYears*12),T2,0)'
+        # AI2 contains the monthly depreciation amount (DepBase / (DepYears * 12))
+        ws[f"I{row}"] = f'=IF(AND(C{row}="Operation",Timeline_M!D{row}>=DevMonths+ConMonths+1,Timeline_M!D{row}<=DevMonths+ConMonths+DepYears*12),AI2,0)'
         ws[f"I{row}"].fill = FORMULA_FILL
         ws[f"I{row}"].number_format = "#,##0"
         
@@ -6863,8 +7044,8 @@ def _setup_cashflow_sheet(ws, s, FORMULA_FILL, HEADER_FILL, HEADER_FONT, THIN_BO
         ws[f"J{row}"].number_format = "#,##0"
         
         # Special Deduction - break down into helper cells to simplify formula
-        # Helper cell W: Pool remaining (U2 - SUM of previous deductions)
-        ws[f"W{row}"] = f"=MAX(0,U2-SUM($K$2:K{row-1}))"
+        # Helper cell W: Pool remaining (AJ2 - SUM of previous deductions)
+        ws[f"W{row}"] = f"=MAX(0,AJ2-SUM($K$2:K{row-1}))"
         ws[f"W{row}"].fill = FORMULA_FILL
         ws[f"W{row}"].number_format = "#,##0"
         
@@ -6876,30 +7057,56 @@ def _setup_cashflow_sheet(ws, s, FORMULA_FILL, HEADER_FILL, HEADER_FONT, THIN_BO
         # Special Deduction - simplified formula using helper cells
         # Pool starts in the year AFTER COD (first month of second operating year = COD month + 12)
         # Usable for SpecialDedYears (in years, convert to months)
-        # Use direct cell references: DevMonths in Inputs!$B$9, ConMonths in Inputs!$B$10
-        ws[f"K{row}"] = f'=IF(AND(EnableSpecialDed="Yes",C{row}="Operation",J{row}>0,Timeline_M!D{row}>=Inputs!$B$9+Inputs!$B$10+12,Timeline_M!D{row}<=Inputs!$B$9+Inputs!$B$10+12+SpecialDedYears*12),MIN(W{row},X{row}),0)'
+        # Use named ranges for cleaner formulas
+        ws[f"K{row}"] = f'=IF(AND(EnableSpecialDed="Yes",C{row}="Operation",J{row}>0,Timeline_M!D{row}>=DevMonths+ConMonths+12,Timeline_M!D{row}<=DevMonths+ConMonths+12+SpecialDedYears*12),MIN(W{row},X{row}),0)'
         ws[f"K{row}"].fill = FORMULA_FILL
         ws[f"K{row}"].number_format = "#,##0"
         
-        # Taxes Payable = Taxable Income After Deduction * Tax Rate
-        # Tax calculation flow:
+        # Loss Carryforward (NOL) Logic
+        # Tax calculation flow with NOL:
         # 1. EBITDA (H) = Revenue - OPEX - SG&A
         # 2. Depreciation (I) reduces taxable income (non-cash expense, but reduces taxes)
-        # 3. Taxable Income (J) = EBITDA - Depreciation
+        # 3. Taxable Income before NOL (J) = EBITDA - Depreciation
         # 4. Special Deduction (K) further reduces taxable income
-        # 5. Taxable After Deduction = MAX(0, Taxable Income - Special Deduction)
-        # 6. Taxes Payable = Taxable After Deduction * Tax Rate
-        # Note: Depreciation is NOT subtracted from cash flow, only from taxable income for tax purposes
-        # NOL (Net Operating Loss) logic would be added here in a more complete implementation
-        ws[f"L{row}"] = f"=MAX(0,J{row}-K{row})*TaxRate"
+        # 5. Income before NOL offset = J - K (can be negative = loss)
+        # 6. NOL Balance (AE): accumulate losses, use to offset future income
+        # 7. Taxable Income after NOL = MAX(0, Income before NOL - Available NOL)
+        # 8. Taxes Payable = Taxable Income after NOL * Tax Rate
+        
+        # NOL Balance column (AE): tracks accumulated losses
+        # If income before NOL (J-K) is negative, add to NOL balance
+        # If positive, reduce NOL balance by amount used to offset income
+        if row == 2:
+            # First row: Start with 0 NOL, accumulate if loss
+            # AE2 = IF(J2-K2<0, ABS(J2-K2), 0)
+            ws[f"AE{row}"] = f"=IF(J{row}-K{row}<0,ABS(J{row}-K{row}),0)"
+        else:
+            # Subsequent rows: Previous NOL + new loss (if any) - used NOL (if any)
+            # If (J-K) < 0: Loss, add to NOL balance -> AE = AE_prev + ABS(J-K)
+            # If (J-K) >= 0: Profit, use NOL to offset -> AE = MAX(0, AE_prev - (J-K))
+            ws[f"AE{row}"] = f"=IF(J{row}-K{row}<0,AE{row-1}+ABS(J{row}-K{row}),MAX(0,AE{row-1}-(J{row}-K{row})))"
+        ws[f"AE{row}"].fill = FORMULA_FILL
+        ws[f"AE{row}"].number_format = "#,##0"
+        
+        # Taxes Payable = Taxable Income After NOL offset * Tax Rate
+        # Taxable After NOL = MAX(0, (J-K) - Available_NOL)
+        # Available_NOL = previous row's NOL balance (AE{row-1}) or 0 for first row
+        # Only pay taxes if income exceeds available NOL
+        if row == 2:
+            # First row: No prior NOL, pay taxes on positive income only
+            ws[f"L{row}"] = f"=MAX(0,J{row}-K{row})*TaxRate"
+        else:
+            # Subsequent rows: Use prior NOL to offset current income
+            # Taxable = MAX(0, (J-K) - prior_NOL)
+            ws[f"L{row}"] = f"=MAX(0,J{row}-K{row}-AE{row-1})*TaxRate"
         ws[f"L{row}"].fill = FORMULA_FILL
         ws[f"L{row}"].number_format = "#,##0"
         
-        # VAT Refund - simplified formula using helper cell V2 for target year
-        # VATAmount: if VATMode="percent", it's a decimal (e.g., 0.19 for 19%), multiply by R2 (TotalCAPEX)
+        # VAT Refund - simplified formula using helper cell AK2 for target year
+        # VATAmount: if VATMode="percent", it's a decimal (e.g., 0.19 for 19%), multiply by AG2 (TotalCAPEX)
         # If VATMode="fixed", it's already the final amount in COP
-        # Use helper cell $V$2 (absolute reference) which contains the target year calculation
-        ws[f"M{row}"] = f'=IF(EnableVATRefund="Yes",IF(C{row}="Operation",IF(YEAR(A{row})=$V$2,IF(VATMode="percent",VATAmount*R2,VATAmount),0),0),0)'
+        # Use helper cell $AK$2 (absolute reference) which contains the target year calculation
+        ws[f"M{row}"] = f'=IF(EnableVATRefund="Yes",IF(C{row}="Operation",IF(YEAR(A{row})=$AK$2,IF(VATMode="percent",VATAmount*AG2,VATAmount),0),0),0)'
         ws[f"M{row}"].fill = FORMULA_FILL
         ws[f"M{row}"].number_format = "#,##0"
         
@@ -6976,10 +7183,10 @@ def _setup_cashflow_sheet(ws, s, FORMULA_FILL, HEADER_FILL, HEADER_FONT, THIN_BO
         ws[f"Q{row}"].fill = FORMULA_FILL
         ws[f"Q{row}"].number_format = "#,##0"
     
-    # Format columns (including helper columns W, X, Y, Z, AB, AC, AD, but hide helper columns)
-    for col in ["D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "W", "X", "Y", "Z", "AB", "AC", "AD"]:
+    # Format columns (including helper columns W, X, Y, Z, AB, AC, AD, AE, AF-AK, but hide helper columns)
+    for col in ["D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "W", "X", "Y", "Z", "AB", "AC", "AD", "AE", "AF", "AG", "AH", "AI", "AJ", "AK"]:
         ws.column_dimensions[col].width = 15
-    # Hide helper columns (W, X, Y, Z, AB, AC, AD)
+    # Hide helper columns (W, X, Y, Z, AB-AK)
     ws.column_dimensions["W"].hidden = True
     ws.column_dimensions["X"].hidden = True
     ws.column_dimensions["Y"].hidden = True
@@ -6987,9 +7194,16 @@ def _setup_cashflow_sheet(ws, s, FORMULA_FILL, HEADER_FILL, HEADER_FONT, THIN_BO
     ws.column_dimensions["AB"].hidden = True
     ws.column_dimensions["AC"].hidden = True
     ws.column_dimensions["AD"].hidden = True
-    # Hide helper columns W and X (they're just for calculation)
-    ws.column_dimensions["W"].hidden = True
-    ws.column_dimensions["X"].hidden = True
+    ws.column_dimensions["AE"].hidden = True  # NOL Balance column
+    ws.column_dimensions["AF"].hidden = True  # CODMonthNum
+    ws.column_dimensions["AG"].hidden = True  # TotalCAPEX
+    ws.column_dimensions["AH"].hidden = True  # DepBase
+    ws.column_dimensions["AI"].hidden = True  # MonthlyDep
+    ws.column_dimensions["AJ"].hidden = True  # SpecialDedPool
+    ws.column_dimensions["AK"].hidden = True  # VATTargetYear
+    
+    # Freeze headers for readability
+    ws.freeze_panes = "A2"
 
 def _setup_summary_sheet(ws, project_name, scenario_name, s, HEADER_FILL, HEADER_FONT, TITLE_FONT, INPUT_FILL, FORMULA_FILL, THIN_BORDER, CENTER_ALIGN, RIGHT_ALIGN, LEFT_ALIGN, max_rows):
     """Create Summary sheet with project info, color legend, and key metrics with formulas."""
@@ -7057,89 +7271,269 @@ def _setup_summary_sheet(ws, project_name, scenario_name, s, HEADER_FILL, HEADER
     row += 1
     
     # Unlevered IRR - need to set up helper ranges first
-    # Calculate max_rows from timeline
-    tl = build_timeline(s.timeline)
-    total_months = int(s.timeline.dev_months) + int(s.timeline.capex_months) + (int(s.timeline.operation_years) * 12)
-    max_rows_cf = min(500, total_months + 10)  # Match the max_rows used in cashflow sheet
+    # Use max_rows (passed in) but cap at 500 to match Cashflow_M size
+    max_rows_cf = min(500, max_rows)
+    last_data_row = max_rows_cf + 1  # since data starts at row 2
     
     ws[f'D1'] = "UnleveredCF_Dates"
     ws[f'E1'] = "UnleveredCF_Values"
     # Set up helper ranges with proper date formatting and limit to actual data
-    for r in range(2, max_rows_cf + 2):  # +2 to include header row
+    for r in range(2, last_data_row + 1):
         ws[f'D{r}'] = f"=Cashflow_M!A{r}"
         ws[f'D{r}'].number_format = "mm/dd/yyyy"  # Format as date
         ws[f'D{r}'].fill = FORMULA_FILL
         ws[f'E{r}'] = f"=Cashflow_M!O{r}"  # Unlevered CF After Tax (now includes -ΔNWC)
         ws[f'E{r}'].fill = FORMULA_FILL
     # Fill remaining with empty to avoid XIRR errors
-    for r in range(max_rows_cf + 2, 502):
+    for r in range(last_data_row + 1, 502):
         ws[f'D{r}'] = ""
         ws[f'E{r}'] = 0
     
     ws[f'A{row}'] = "Unlevered IRR (Pre-tax):"
     ws[f'A{row}'].font = Font(bold=True)
-    ws[f'B{row}'] = f"=XIRR(E2:E{max_rows_cf+1},D2:D{max_rows_cf+1})"
+    ws[f'B{row}'] = f"=XIRR(E2:E{last_data_row},D2:D{last_data_row})"
     ws[f'B{row}'].fill = FORMULA_FILL
     ws[f'B{row}'].number_format = "0.00%"
     row += 1
     
-    # Equity IRR - need to set up helper ranges
+    # Equity IRR - set up helper ranges in columns F and G
     ws[f'F1'] = "EquityCF_Dates"
     ws[f'G1'] = "EquityCF_Values"
-    for r in range(2, max_rows_cf + 2):
+    for r in range(2, last_data_row + 1):
         ws[f'F{r}'] = f"=Cashflow_M!A{r}"
-        ws[f'F{r}'].number_format = "mm/dd/yyyy"  # Format as date
+        ws[f'F{r}'].number_format = "mm/dd/yyyy"
         ws[f'F{r}'].fill = FORMULA_FILL
-        ws[f'G{r}'] = f"=Cashflow_M!R{r}"  # Equity CF After Tax (now includes -ΔNWC)
+        ws[f'G{r}'] = f"=Cashflow_M!R{r}"  # Equity CF After Tax
         ws[f'G{r}'].fill = FORMULA_FILL
-    # Fill remaining with empty
-    for r in range(max_rows_cf + 2, 502):
+    # Fill remaining rows with empty to avoid XIRR errors
+    for r in range(last_data_row + 1, 502):
         ws[f'F{r}'] = ""
         ws[f'G{r}'] = 0
     
     ws[f'A{row}'] = "Equity IRR (After-tax):"
     ws[f'A{row}'].font = Font(bold=True)
-    ws[f'B{row}'] = f"=XIRR(G2:G{max_rows_cf+1},F2:F{max_rows_cf+1})"
+    ws[f'B{row}'] = f"=XIRR(G2:G{last_data_row},F2:F{last_data_row})"
     ws[f'B{row}'].fill = FORMULA_FILL
     ws[f'B{row}'].number_format = "0.00%"
+    row += 1
+    
+    # Freeze header row for readability
+    ws.freeze_panes = "A5"
 
-def _setup_outputs_sheet(ws, s, HEADER_FILL, HEADER_FONT, TITLE_FONT, FORMULA_FILL, THIN_BORDER, CENTER_ALIGN, RIGHT_ALIGN, max_rows):
-    """Create Outputs sheet with annual summaries and formulas."""
-    tl = build_timeline(s.timeline)
+
+def _setup_checks_sheet(ws, HEADER_FILL, HEADER_FONT, TITLE_FONT, FORMULA_FILL, THIN_BORDER, CENTER_ALIGN, RIGHT_ALIGN):
+    """Create Checks sheet with reconciliation and PASS/FAIL flags."""
     row = 1
-    ws[f'A{row}'] = "Annual Outputs"
-    ws[f'A{row}'].font = TITLE_FONT
-    ws.merge_cells(f'A{row}:J{row}')
+    ws["A1"] = "Checks & Reconciliation"
+    ws["A1"].font = TITLE_FONT
+    ws.merge_cells("A1:E1")
     row += 2
     
-    # Annual cash flow summary
-    ws[f'A{row}'] = "Year"
-    ws[f'B{row}'] = "Unlevered CF"
-    ws[f'C{row}'] = "Equity CF"
-    for col in ['A', 'B', 'C']:
-        cell = ws[f'{col}{row}']
+    # Header for checks table
+    headers = ["Metric", "Monthly Total", "Annual Total (Calendar)", "Difference", "Status"]
+    for col, header in enumerate(headers, 1):
+        cell = ws.cell(row=row, column=col, value=header)
         cell.font = HEADER_FONT
         cell.fill = HEADER_FILL
         cell.border = THIN_BORDER
         cell.alignment = CENTER_ALIGN
     row += 1
     
-    # Annual aggregation formulas
-    cod_year = tl["cod"].year
-    for year_offset in range(0, min(30, int(s.timeline.operation_years) + 5)):
-        year_val = cod_year + year_offset
-        ws[f'A{row}'] = year_val
-        ws[f'B{row}'] = f"=SUMIF(Cashflow_M!B:B,{year_val},Cashflow_M!G:G)"
-        ws[f'B{row}'].fill = FORMULA_FILL
-        ws[f'B{row}'].number_format = "#,##0"
-        ws[f'C{row}'] = f"=SUMIF(Cashflow_M!B:B,{year_val},Cashflow_M!R:R)"
-        ws[f'C{row}'].fill = FORMULA_FILL
-        ws[f'C{row}'].number_format = "#,##0"
-        row += 1
+    # Helper to write a single check row
+    def add_check(metric_name: str, monthly_formula: str, annual_named_range: str, current_row: int) -> int:
+        ws[f"A{current_row}"] = metric_name
+        ws[f"A{current_row}"].border = THIN_BORDER
+        
+        ws[f"B{current_row}"] = monthly_formula
+        ws[f"B{current_row}"].fill = FORMULA_FILL
+        ws[f"B{current_row}"].number_format = "#,##0"
+        ws[f"B{current_row}"].border = THIN_BORDER
+        
+        ws[f"C{current_row}"] = f"=SUM({annual_named_range})"
+        ws[f"C{current_row}"].fill = FORMULA_FILL
+        ws[f"C{current_row}"].number_format = "#,##0"
+        ws[f"C{current_row}"].border = THIN_BORDER
+        
+        ws[f"D{current_row}"] = f"=B{current_row}-C{current_row}"
+        ws[f"D{current_row}"].fill = FORMULA_FILL
+        ws[f"D{current_row}"].number_format = "#,##0"
+        ws[f"D{current_row}"].border = THIN_BORDER
+        
+        ws[f"E{current_row}"] = f'=IF(ABS(D{current_row})<=1,"PASS","FAIL")'
+        ws[f"E{current_row}"].fill = FORMULA_FILL
+        ws[f"E{current_row}"].border = THIN_BORDER
+        return current_row + 1
     
-    # Format columns
-    for col in ['A', 'B', 'C']:
+    # Monthly vs annual checks using named ranges created in Outputs sheet
+    row = add_check("Revenue", "=SUM(Cashflow_M!D:D)", "CY_Revenue", row)
+    row = add_check("OPEX", "=SUM(Cashflow_M!E:E)", "CY_OPEX", row)
+    row = add_check("SG&A", "=SUM(Cashflow_M!F:F)", "CY_SGA", row)
+    row = add_check("Taxes", "=SUM(Cashflow_M!L:L)", "CY_Taxes", row)
+    row = add_check("CAPEX", "=SUM(Cashflow_M!G:G)", "CY_CAPEX", row)
+    row = add_check("Delta NWC", "=SUM(Cashflow_M!N:N)", "CY_DeltaNWC", row)
+    row = add_check("Unlevered CF", "=SUM(Cashflow_M!O:O)", "CY_UnleveredCF", row)
+    row = add_check("Equity CF", "=SUM(Cashflow_M!R:R)", "CY_EquityCF", row)
+    
+    row += 1
+    
+    # Debt toggle check: when debt disabled, Equity CF should equal Unlevered CF
+    ws[f"A{row}"] = "Debt Disabled Check (Equity CF = Unlevered CF)"
+    ws[f"A{row}"].border = THIN_BORDER
+    
+    # Use SUMPRODUCT for array-like calculation (more compatible than MAX(ABS(...)))
+    ws[f"B{row}"] = '=SUMPRODUCT(ABS(Cashflow_M!R2:R500-Cashflow_M!O2:O500))'
+    ws[f"B{row}"].fill = FORMULA_FILL
+    ws[f"B{row}"].number_format = "#,##0"
+    ws[f"B{row}"].border = THIN_BORDER
+    
+    # Check if debt disabled and cash flows match (using f-string for row interpolation)
+    ws[f"C{row}"] = f'=IF(DebtEnabled="Yes","N/A",IF(B{row}<=1,"PASS","FAIL"))'
+    ws[f"C{row}"].fill = FORMULA_FILL
+    ws[f"C{row}"].border = THIN_BORDER
+    
+    # Freeze header row
+    ws.freeze_panes = "A3"
+
+def _setup_outputs_sheet(ws, s, HEADER_FILL, HEADER_FONT, TITLE_FONT, FORMULA_FILL, THIN_BORDER, CENTER_ALIGN, RIGHT_ALIGN, max_rows):
+    """Create Outputs sheet with calendar-year and operating-year annual summaries."""
+    from openpyxl.workbook.defined_name import DefinedName
+    
+    tl = build_timeline(s.timeline)
+    cod_year = tl["cod"].year
+    op_years = int(s.timeline.operation_years)
+    
+    row = 1
+    ws[f"A{row}"] = "Annual Outputs"
+    ws[f"A{row}"].font = TITLE_FONT
+    ws.merge_cells(f"A{row}:J{row}")
+    row += 2
+    
+    # ----------------------------
+    # Calendar-year view (by Year)
+    # ----------------------------
+    ws[f"A{row}"] = "Calendar Year View"
+    ws[f"A{row}"].font = TITLE_FONT
+    ws.merge_cells(f"A{row}:J{row}")
+    row += 1
+    
+    ws[f"A{row}"] = "Year"
+    ws[f"B{row}"] = "Revenue"
+    ws[f"C{row}"] = "OPEX"
+    ws[f"D{row}"] = "SG&A"
+    ws[f"E{row}"] = "Taxes"
+    ws[f"F{row}"] = "CAPEX"
+    ws[f"G{row}"] = "Delta NWC"
+    ws[f"H{row}"] = "Unlevered CF"
+    ws[f"I{row}"] = "Equity CF"
+    for col in ["A", "B", "C", "D", "E", "F", "G", "H", "I"]:
+        cell = ws[f"{col}{row}"]
+        cell.font = HEADER_FONT
+        cell.fill = HEADER_FILL
+        cell.border = THIN_BORDER
+        cell.alignment = CENTER_ALIGN
+    row += 1
+    
+    cy_start_row = row
+    max_years = min(30, op_years + 5)
+    for year_offset in range(0, max_years):
+        year_val = cod_year + year_offset
+        ws[f"A{row}"] = year_val
+        ws[f"B{row}"] = f"=SUMIF(Cashflow_M!B:B,{year_val},Cashflow_M!D:D)"  # Revenue
+        ws[f"C{row}"] = f"=SUMIF(Cashflow_M!B:B,{year_val},Cashflow_M!E:E)"  # OPEX
+        ws[f"D{row}"] = f"=SUMIF(Cashflow_M!B:B,{year_val},Cashflow_M!F:F)"  # SG&A
+        ws[f"E{row}"] = f"=SUMIF(Cashflow_M!B:B,{year_val},Cashflow_M!L:L)"  # TaxesPayable
+        ws[f"F{row}"] = f"=SUMIF(Cashflow_M!B:B,{year_val},Cashflow_M!G:G)"  # CAPEX
+        ws[f"G{row}"] = f"=SUMIF(Cashflow_M!B:B,{year_val},Cashflow_M!N:N)"  # Delta NWC
+        ws[f"H{row}"] = f"=SUMIF(Cashflow_M!B:B,{year_val},Cashflow_M!O:O)"  # Unlevered CF
+        ws[f"I{row}"] = f"=SUMIF(Cashflow_M!B:B,{year_val},Cashflow_M!R:R)"  # Equity CF
+        for col in ["B", "C", "D", "E", "F", "G", "H", "I"]:
+            cell = ws[f"{col}{row}"]
+            cell.fill = FORMULA_FILL
+            cell.number_format = "#,##0"
+        row += 1
+    cy_end_row = row - 1
+    
+    # Format columns for calendar view
+    for col in ["A", "B", "C", "D", "E", "F", "G", "H", "I"]:
         ws.column_dimensions[col].width = 15
+    
+    # Define named ranges for calendar-year totals (for Checks sheet)
+    wb = ws.parent
+    sheet_title = ws.title
+    def _add_named(name: str, ref: str) -> None:
+        try:
+            dn = DefinedName(name=name, attr_text=f"'{sheet_title}'!{ref}")
+            wb.defined_names.append(dn)
+        except Exception:
+            pass
+    
+    _add_named("CY_Revenue", f"$B${cy_start_row}:$B${cy_end_row}")
+    _add_named("CY_OPEX", f"$C${cy_start_row}:$C${cy_end_row}")
+    _add_named("CY_SGA", f"$D${cy_start_row}:$D${cy_end_row}")
+    _add_named("CY_Taxes", f"$E${cy_start_row}:$E${cy_end_row}")
+    _add_named("CY_CAPEX", f"$F${cy_start_row}:$F${cy_end_row}")
+    _add_named("CY_DeltaNWC", f"$G${cy_start_row}:$G${cy_end_row}")
+    _add_named("CY_UnleveredCF", f"$H${cy_start_row}:$H${cy_end_row}")
+    _add_named("CY_EquityCF", f"$I${cy_start_row}:$I${cy_end_row}")
+    
+    # ----------------------------
+    # Operating-year view (Year 1..N)
+    # ----------------------------
+    row += 2
+    ws[f"A{row}"] = "Operating Year View"
+    ws[f"A{row}"].font = TITLE_FONT
+    ws.merge_cells(f"A{row}:J{row}")
+    row += 1
+    
+    ws[f"A{row}"] = "Operating Year"
+    ws[f"B{row}"] = "Revenue"
+    ws[f"C{row}"] = "OPEX"
+    ws[f"D{row}"] = "SG&A"
+    ws[f"E{row}"] = "Taxes"
+    ws[f"F{row}"] = "CAPEX"
+    ws[f"G{row}"] = "Delta NWC"
+    ws[f"H{row}"] = "Unlevered CF"
+    ws[f"I{row}"] = "Equity CF"
+    for col in ["A", "B", "C", "D", "E", "F", "G", "H", "I"]:
+        cell = ws[f"{col}{row}"]
+        cell.font = HEADER_FONT
+        cell.fill = HEADER_FILL
+        cell.border = THIN_BORDER
+        cell.alignment = CENTER_ALIGN
+    row += 1
+    
+    oy_start_row = row
+    # Use OperatingYear from OPEX_M!D:D (already calculated there)
+    for oy in range(1, op_years + 1):
+        ws[f"A{row}"] = oy
+        crit = oy
+        ws[f"B{row}"] = f"=SUMIF(OPEX_M!D:D,{crit},Cashflow_M!D:D)"
+        ws[f"C{row}"] = f"=SUMIF(OPEX_M!D:D,{crit},Cashflow_M!E:E)"
+        ws[f"D{row}"] = f"=SUMIF(OPEX_M!D:D,{crit},Cashflow_M!F:F)"
+        ws[f"E{row}"] = f"=SUMIF(OPEX_M!D:D,{crit},Cashflow_M!L:L)"
+        ws[f"F{row}"] = f"=SUMIF(OPEX_M!D:D,{crit},Cashflow_M!G:G)"
+        ws[f"G{row}"] = f"=SUMIF(OPEX_M!D:D,{crit},Cashflow_M!N:N)"
+        ws[f"H{row}"] = f"=SUMIF(OPEX_M!D:D,{crit},Cashflow_M!O:O)"
+        ws[f"I{row}"] = f"=SUMIF(OPEX_M!D:D,{crit},Cashflow_M!R:R)"
+        for col in ["B", "C", "D", "E", "F", "G", "H", "I"]:
+            cell = ws[f"{col}{row}"]
+            cell.fill = FORMULA_FILL
+            cell.number_format = "#,##0"
+        row += 1
+    oy_end_row = row - 1
+    
+    # Define named ranges for operating-year totals
+    _add_named("OY_Revenue", f"$B${oy_start_row}:$B${oy_end_row}")
+    _add_named("OY_OPEX", f"$C${oy_start_row}:$C${oy_end_row}")
+    _add_named("OY_SGA", f"$D${oy_start_row}:$D${oy_end_row}")
+    _add_named("OY_Taxes", f"$E${oy_start_row}:$E${oy_end_row}")
+    _add_named("OY_CAPEX", f"$F${oy_start_row}:$F${oy_end_row}")
+    _add_named("OY_DeltaNWC", f"$G${oy_start_row}:$G${oy_end_row}")
+    _add_named("OY_UnleveredCF", f"$H${oy_start_row}:$H${oy_end_row}")
+    _add_named("OY_EquityCF", f"$I${oy_start_row}:$I${oy_end_row}")
+    
+    # Freeze header row for readability
+    ws.freeze_panes = "A4"
 
 # -----------------------------
 # Excel Export Function
@@ -7197,6 +7591,7 @@ def generate_excel_report(project_name: str, scenario_name: str, s: ScenarioInpu
     ws_debt = wb.create_sheet("Debt_M", 7)
     ws_cashflow = wb.create_sheet("Cashflow_M", 8)
     ws_outputs = wb.create_sheet("Outputs", 9)
+    ws_checks = wb.create_sheet("Checks", 10)
     
     # ==================== SETUP INPUTS SHEET FIRST (needed for named ranges) ====================
     named_range_refs, cell_positions = _setup_inputs_sheet(ws_inputs, s, INPUT_FILL, HEADER_FILL, HEADER_FONT, TITLE_FONT, SECTION_FILL, THIN_BORDER, CENTER_ALIGN, RIGHT_ALIGN)
@@ -7239,9 +7634,12 @@ def generate_excel_report(project_name: str, scenario_name: str, s: ScenarioInpu
     # ==================== SETUP OUTPUTS SHEET ====================
     _setup_outputs_sheet(ws_outputs, s, HEADER_FILL, HEADER_FONT, TITLE_FONT, FORMULA_FILL, THIN_BORDER, CENTER_ALIGN, RIGHT_ALIGN, max_rows)
     
+    # ==================== SETUP CHECKS SHEET ====================
+    _setup_checks_sheet(ws_checks, HEADER_FILL, HEADER_FONT, TITLE_FONT, FORMULA_FILL, THIN_BORDER, CENTER_ALIGN, RIGHT_ALIGN)
+    
     # Validate workbook structure before saving
     # Check that all referenced sheets exist
-    required_sheets = ["Inputs", "Timeline_M", "CAPEX_M", "Revenue_M", "OPEX_M", "SG&A_M", "Debt_M", "Cashflow_M", "Summary", "Outputs"]
+    required_sheets = ["Inputs", "Timeline_M", "CAPEX_M", "Revenue_M", "OPEX_M", "SG&A_M", "Debt_M", "Cashflow_M", "Summary", "Outputs", "Checks"]
     for sheet_name in required_sheets:
         if sheet_name not in wb.sheetnames:
             raise ValueError(f"Required sheet '{sheet_name}' is missing from workbook")
@@ -7306,6 +7704,9 @@ with tab_summary:
     
     with export_col2:
         if OPENPYXL_AVAILABLE:
+            default_excel_name = f"{project_name}_{scenario_name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+            
+            # Generate and cache the latest Excel report in session state
             if st.button("📊 Generate Excel Report", type="primary", key="excel_export_btn"):
                 try:
                     excel_buffer = generate_excel_report(
@@ -7313,17 +7714,24 @@ with tab_summary:
                         scenario_name=scenario_name,
                         s=s
                     )
-                    st.download_button(
-                        label="⬇️ Download Excel",
-                        data=excel_buffer,
-                        file_name=f"{project_name}_{scenario_name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                        width='stretch',
-                        key="excel_download_btn"
-                    )
-                    st.success("Excel file generated successfully!")
+                    # Store raw bytes and filename in session_state to avoid stale buffers
+                    st.session_state["excel_report_bytes"] = excel_buffer.getvalue()
+                    st.session_state["excel_report_name"] = default_excel_name
+                    st.success("Excel file generated successfully! Use the download button below.")
                 except Exception as e:
                     st.error(f"Error generating Excel: {str(e)}")
+            
+            # Always offer download of the most recently generated Excel file (if any)
+            excel_bytes = st.session_state.get("excel_report_bytes")
+            if excel_bytes:
+                st.download_button(
+                    label="⬇️ Download Excel",
+                    data=excel_bytes,
+                    file_name=st.session_state.get("excel_report_name", default_excel_name),
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    use_container_width=True,
+                    key="excel_download_btn"
+                )
         else:
             st.warning("Excel export requires openpyxl. Install: `pip install openpyxl`")
     
@@ -7331,8 +7739,69 @@ with tab_summary:
     
     currency = st.radio("Display currency", ["COP", "USD"], horizontal=True, index=0, key="currency_summary")
     
-    # Get timeline and FX path (for proper USD conversion using indexation)
+    # -------------------------
+    # 1) Project Overview (top section)
+    # -------------------------
+    st.markdown("### Project Overview")
+    po = s.project_overview
+    overview_col1, overview_col2, overview_col3, overview_col4 = st.columns(4)
+    with overview_col1:
+        st.metric("Project Name", po.project_name or project_name)
+    with overview_col2:
+        st.metric("Country", po.country or "—")
+    with overview_col3:
+        st.metric("Location", po.region_department or "—")
+    with overview_col4:
+        st.metric("Technology", po.technology or "—")
+    
+    st.divider()
+    
+    # -------------------------
+    # 2) Macroeconomic snapshot
+    # -------------------------
+    st.markdown("### Macroeconomic Assumptions")
+    macro_col1, macro_col2, macro_col3 = st.columns(3)
+    with macro_col1:
+        st.metric("Colombian CPI", f"{float(s.macro.col_cpi):.2f}%")
+    with macro_col2:
+        st.metric("Colombian PPI", f"{float(s.macro.col_ppi):.2f}%")
+    with macro_col3:
+        st.metric("US CPI", f"{float(s.macro.us_cpi):.2f}%")
+    
+    st.divider()
+    
+    # -------------------------
+    # 3) Timeline graph (same as Timeline tab)
+    # -------------------------
+    st.markdown("### Project Timeline")
     tl = build_timeline(s.timeline)
+    if not PLOTLY_AVAILABLE or px is None:
+        st.warning("⚠️ Charts unavailable - Plotly installation issue. All other functionality works normally.")
+    else:
+        gantt = pd.DataFrame(
+            [
+                {"Stage": "Development", "Start": date(tl["start"].year, tl["start"].month, 1), "Finish": date(tl["rtb"].year, tl["rtb"].month, 1)},
+                {"Stage": "Construction", "Start": date(tl["rtb"].year, tl["rtb"].month, 1), "Finish": date(tl["cod"].year, tl["cod"].month, 1)},
+                {"Stage": "Operation", "Start": date(tl["cod"].year, tl["cod"].month, 1), "Finish": date(tl["end_op"].year, tl["end_op"].month, 1)},
+            ]
+        )
+        
+        fig_tl = px.timeline(
+            gantt,
+            x_start="Start",
+            x_end="Finish",
+            y="Stage",
+            color="Stage",
+            category_orders={"Stage": ["Development", "Construction", "Operation"]},
+        )
+        fig_tl.update_yaxes(autorange="reversed")
+        fig_tl.update_xaxes(dtick="M12", tickformat="%Y")
+        fig_tl.update_layout(height=280, margin=dict(l=10, r=10, t=10, b=10), legend_title_text="")
+        st.plotly_chart(fig_tl, width='stretch', key="summary_timeline")
+    
+    st.divider()
+    
+    # Get timeline and FX path (for proper USD conversion using indexation)
     cod = tl["cod"]
     
     # Get FX series for all years (accounts for CPI indexation differences)
@@ -7786,7 +8255,7 @@ with tab_summary:
         # Revenue Calculation:
         ("Price (COP/kWh)", "PPA Price (COP/kWh)"),  # Input (no operation symbol)
         ("Power Generation (kWh/year)", "x Power Generation (kWh/year)"),  # Multiplier
-        ("Revenue (COP)", "= Revenue"),  # Result: Price × Generation
+        ("Revenue (COP)", "(=) Revenue"),  # Result: Price × Generation
         
         # Operating Expenses:
         ("Total OPEX (COP)", "(-) OPEX"),  # Subtract operating expenses
@@ -7795,7 +8264,7 @@ with tab_summary:
         ("SG&A/Revenue %", "SG&A/Revenue %"),  # Percentage (informational)
         
         # EBITDA Calculation:
-        ("EBITDA (COP)", "= EBITDA"),  # Result: Revenue - OPEX - SG&A
+        ("EBITDA (COP)", "(=) EBITDA"),  # Result: Revenue - OPEX - SG&A
         
         # Depreciation & Interest (for tax calculation):
         ("Depreciation (COP)", "(-) Depreciation"),  # Subtract depreciation (for tax)
@@ -7804,14 +8273,14 @@ with tab_summary:
         # Tax Calculations:
         ("Levered CAPEX Tax Deduction (COP)", "(-) CAPEX Tax Deduction"),  # Tax benefit (reduces taxable income)
         ("Levered Loss Carryforward End (COP)", "(-) Loss Carryforward"),  # Tax adjustment (reduces taxable income)
-        ("Levered Taxable Income (COP)", "= Taxable Income"),  # Result: EBITDA - Depreciation - Interest - Deductions
+        ("Levered Taxable Income (COP)", "(=) Taxable Income"),  # Result: EBITDA - Depreciation - Interest - Deductions
         ("Levered Taxes Payable (COP)", "(-) Taxes Payable"),  # Subtract taxes
         
         # Debt Service (cash flow only, not tax-deductible):
         ("Debt Service (COP)", "(-) Debt Service"),  # Subtract total debt service (interest + principal, cash flow only)
         
         # Net Income:
-        ("Levered Net Income After Tax (COP)", "= Net Income After Tax"),  # Result: Taxable Income - Taxes
+        ("Levered Net Income After Tax (COP)", "(=) Net Income After Tax"),  # Result: Taxable Income - Taxes
         
         # Cash Flow Adjustments:
         ("CAPEX (COP)", "(-) CAPEX"),  # Subtract capital expenditures
@@ -7822,7 +8291,7 @@ with tab_summary:
         ("ΔNWC (COP)", "(-) Working Capital Change"),  # Subtract working capital change
         
         # Final Cash Flow:
-        ("Levered CF (After-tax, COP)", "= Levered CF After-tax"),  # Final result: Net Income + Adjustments
+        ("Levered CF (After-tax, COP)", "(=) Levered CF After-tax"),  # Final result: Net Income + Adjustments
     ]
     
     # Handle currency conversion
@@ -7946,8 +8415,48 @@ with tab_summary:
                     except (ValueError, TypeError):
                         comp_df.at[idx, col] = "—"
     
-    # Display the comprehensive table
-    st.dataframe(comp_df, use_container_width=True, hide_index=True)
+    # Display the comprehensive table (show all rows)
+    st.dataframe(comp_df, width='stretch', height='content', hide_index=True)
+    
+    st.divider()
+    
+    # 12. Sensitivity Heatmap (if available from Sensitivity tab)
+    sens_key = f"sensitivity_results_{project_name}_{scenario_name}"
+    if sens_key in st.session_state:
+        sens_data = st.session_state[sens_key]
+        pivot_table = sens_data["pivot_table"]
+        var1_name = sens_data["var1_name"]
+        var2_name = sens_data["var2_name"]
+        x_labels = sens_data["x_labels"]
+        y_labels = sens_data["y_labels"]
+        text_matrix = sens_data["text_matrix"]
+        
+        st.markdown("### Sensitivity Analysis - Equity IRR (After-Tax)")
+        
+        # Create heatmap using stored data
+        if PLOTLY_AVAILABLE and go is not None:
+            fig = go.Figure(data=go.Heatmap(
+                z=pivot_table.values,
+                x=x_labels,
+                y=y_labels,
+                text=text_matrix,
+                texttemplate="%{text}",
+                textfont={"size": 18, "color": "black", "family": "Arial Black"},
+                colorscale="RdYlGn",
+                colorbar=dict(title="Equity IRR (%)"),
+                hovertemplate="%{y}<br>%{x}<br>IRR: %{z:.2f}%<extra></extra>"
+            ))
+            
+            fig.update_layout(
+                title=f"Equity IRR (After-Tax) Sensitivity: {var1_name} vs {var2_name}",
+                xaxis_title=var1_name,
+                yaxis_title=var2_name,
+                height=500,
+                margin=dict(l=10, r=10, t=50, b=10)
+            )
+            st.plotly_chart(fig, width='stretch', key="summary_sensitivity_heatmap")
+        else:
+            st.warning("⚠️ Chart unavailable")
 
 
 # -----------------------------
@@ -8285,6 +8794,19 @@ with tab_sensitivity:
                 margin=dict(l=10, r=10, t=50, b=10)
             )
             st.plotly_chart(fig, width='stretch', key="sensitivity_heatmap")
+            
+            # Store sensitivity results in session state for display in Summary tab
+            sens_key = f"sensitivity_results_{project_name}_{scenario_name}"
+            st.session_state[sens_key] = {
+                "pivot_table": pivot_table,
+                "var1_name": var1_name,
+                "var2_name": var2_name,
+                "var1_base": var1_base,
+                "var2_base": var2_base,
+                "x_labels": x_labels,
+                "y_labels": y_labels,
+                "text_matrix": text_matrix
+            }
         else:
             st.warning("⚠️ Chart unavailable")
 
