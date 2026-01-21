@@ -2590,36 +2590,34 @@ with st.sidebar:
             num_scenarios = len(proj.get("scenarios", {}))
             st.warning(f"⚠️ Are you sure you want to delete '{project_name}'? This will delete {num_scenarios} scenario(s) and all associated data. This action cannot be undone.")
             confirm_text = st.text_input("Type the project name to confirm:", key=f"delete_confirm_text_{project_name}")
-            col_confirm, col_cancel = st.columns(2)
-            with col_confirm:
-                if st.button("Yes, Delete", type="primary"):
-                    if confirm_text.strip().lower() == project_name.strip().lower():
-                        try:
-                            # Delete project from database
-                            del db["projects"][project_name]
-                            _save_db(db)
-                            
-                            # Clean up uploaded files in data directory
-                            safe_project = "".join(c for c in project_name if c.isalnum() or c in (' ', '-', '_')).strip()
-                            project_data_dir = os.path.join("data", safe_project)
-                            if os.path.exists(project_data_dir):
-                                try:
-                                    shutil.rmtree(project_data_dir)
-                                except Exception:
-                                    # Log error but continue - file cleanup is optional
-                                    pass
-                            
-                            st.session_state[delete_confirm_key] = False
-                            st.success(f"Project '{project_name}' deleted.")
-                            st.rerun()
-                        except Exception as e:
-                            st.error(f"Error deleting project: {str(e)}")
-                    else:
-                        st.error("Project name doesn't match. Deletion cancelled.")
-            with col_cancel:
-                if st.button("Cancel"):
-                    st.session_state[delete_confirm_key] = False
-                    st.rerun()
+            if st.button("Yes, Delete", type="primary"):
+                if confirm_text.strip().lower() == project_name.strip().lower():
+                    try:
+                        # Delete project from database
+                        del db["projects"][project_name]
+                        _save_db(db)
+                        
+                        # Clean up uploaded files in data directory
+                        safe_project = "".join(c for c in project_name if c.isalnum() or c in (' ', '-', '_')).strip()
+                        project_data_dir = os.path.join("data", safe_project)
+                        if os.path.exists(project_data_dir):
+                            try:
+                                shutil.rmtree(project_data_dir)
+                            except Exception:
+                                # Log error but continue - file cleanup is optional
+                                pass
+                        
+                        st.session_state[delete_confirm_key] = False
+                        st.success(f"Project '{project_name}' deleted.")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Error deleting project: {str(e)}")
+                else:
+                    st.error("Project name doesn't match. Deletion cancelled.")
+            
+            if st.button("Cancel"):
+                st.session_state[delete_confirm_key] = False
+                st.rerun()
         
         st.divider()
         
@@ -2637,39 +2635,37 @@ with st.sidebar:
                 value=project_name,
                 key=f"rename_project_input_{project_name}",
             )
-            col_rename, col_cancel_rename = st.columns(2)
-            with col_rename:
-                if st.button("Rename", type="primary"):
-                    new_name = new_project_name.strip()
-                    if not new_name:
-                        st.error("Project name cannot be empty.")
-                    elif new_name == project_name:
-                        st.error("New name must be different from current name.")
-                    elif new_name in db["projects"]:
-                        st.error(f"Project '{new_name}' already exists.")
-                    else:
-                        try:
-                            # Rename in database
-                            db["projects"][new_name] = db["projects"].pop(project_name)
-                            _save_db(db)
-                            
-                            # Rename file directory
-                            old_safe = "".join(c for c in project_name if c.isalnum() or c in (' ', '-', '_')).strip()
-                            new_safe = "".join(c for c in new_name if c.isalnum() or c in (' ', '-', '_')).strip()
-                            old_dir = os.path.join("data", old_safe)
-                            new_dir = os.path.join("data", new_safe)
-                            if os.path.exists(old_dir) and not os.path.exists(new_dir):
-                                os.rename(old_dir, new_dir)
-                            
-                            st.session_state[rename_project_key] = False
-                            st.success(f"Project renamed to '{new_name}'.")
-                            st.rerun()
-                        except Exception as e:
-                            st.error(f"Error renaming project: {str(e)}")
-            with col_cancel_rename:
-                if st.button("Cancel rename"):
-                    st.session_state[rename_project_key] = False
-                    st.rerun()
+            if st.button("Rename", type="primary"):
+                new_name = new_project_name.strip()
+                if not new_name:
+                    st.error("Project name cannot be empty.")
+                elif new_name == project_name:
+                    st.error("New name must be different from current name.")
+                elif new_name in db["projects"]:
+                    st.error(f"Project '{new_name}' already exists.")
+                else:
+                    try:
+                        # Rename in database
+                        db["projects"][new_name] = db["projects"].pop(project_name)
+                        _save_db(db)
+                        
+                        # Rename file directory
+                        old_safe = "".join(c for c in project_name if c.isalnum() or c in (' ', '-', '_')).strip()
+                        new_safe = "".join(c for c in new_name if c.isalnum() or c in (' ', '-', '_')).strip()
+                        old_dir = os.path.join("data", old_safe)
+                        new_dir = os.path.join("data", new_safe)
+                        if os.path.exists(old_dir) and not os.path.exists(new_dir):
+                            os.rename(old_dir, new_dir)
+                        
+                        st.session_state[rename_project_key] = False
+                        st.success(f"Project renamed to '{new_name}'.")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Error renaming project: {str(e)}")
+            
+            if st.button("Cancel rename"):
+                st.session_state[rename_project_key] = False
+                st.rerun()
         
         st.divider()
 
@@ -2727,46 +2723,44 @@ with st.sidebar:
                 value=scenario_name,
                 key=f"rename_scenario_input_{project_name}_{scenario_name}",
             )
-            col_s_rename, col_s_cancel = st.columns(2)
-            with col_s_rename:
-                if st.button("Rename scenario", type="primary"):
-                    new_name = new_scenario_name.strip()
-                    if not new_name:
-                        st.error("Scenario name cannot be empty.")
-                    elif new_name == scenario_name:
-                        st.error("New name must be different from current name.")
-                    elif new_name in proj["scenarios"]:
-                        st.error(f"Scenario '{new_name}' already exists in this project.")
-                    else:
-                        try:
-                            # Rename scenario in database
-                            proj["scenarios"][new_name] = proj["scenarios"].pop(scenario_name)
-                            
-                            # Update name field inside scenario data if present
-                            scen_dict = proj["scenarios"][new_name]
-                            if isinstance(scen_dict, dict) and "name" in scen_dict:
-                                scen_dict["name"] = new_name
-                            
-                            _save_db(db)
-                            
-                            # Rename scenario directory for uploads
-                            safe_project = "".join(c for c in project_name if c.isalnum() or c in (' ', '-', '_')).strip()
-                            old_safe_scen = "".join(c for c in scenario_name if c.isalnum() or c in (' ', '-', '_')).strip()
-                            new_safe_scen = "".join(c for c in new_name if c.isalnum() or c in (' ', '-', '_')).strip()
-                            old_scen_dir = os.path.join("data", safe_project, old_safe_scen)
-                            new_scen_dir = os.path.join("data", safe_project, new_safe_scen)
-                            if os.path.exists(old_scen_dir) and not os.path.exists(new_scen_dir):
-                                os.rename(old_scen_dir, new_scen_dir)
-                            
-                            st.session_state[rename_scenario_key] = False
-                            st.success(f"Scenario renamed to '{new_name}'.")
-                            st.rerun()
-                        except Exception as e:
-                            st.error(f"Error renaming scenario: {str(e)}")
-            with col_s_cancel:
-                if st.button("Cancel scenario rename"):
-                    st.session_state[rename_scenario_key] = False
-                    st.rerun()
+            if st.button("Rename scenario", type="primary"):
+                new_name = new_scenario_name.strip()
+                if not new_name:
+                    st.error("Scenario name cannot be empty.")
+                elif new_name == scenario_name:
+                    st.error("New name must be different from current name.")
+                elif new_name in proj["scenarios"]:
+                    st.error(f"Scenario '{new_name}' already exists in this project.")
+                else:
+                    try:
+                        # Rename scenario in database
+                        proj["scenarios"][new_name] = proj["scenarios"].pop(scenario_name)
+                        
+                        # Update name field inside scenario data if present
+                        scen_dict = proj["scenarios"][new_name]
+                        if isinstance(scen_dict, dict) and "name" in scen_dict:
+                            scen_dict["name"] = new_name
+                        
+                        _save_db(db)
+                        
+                        # Rename scenario directory for uploads
+                        safe_project = "".join(c for c in project_name if c.isalnum() or c in (' ', '-', '_')).strip()
+                        old_safe_scen = "".join(c for c in scenario_name if c.isalnum() or c in (' ', '-', '_')).strip()
+                        new_safe_scen = "".join(c for c in new_name if c.isalnum() or c in (' ', '-', '_')).strip()
+                        old_scen_dir = os.path.join("data", safe_project, old_safe_scen)
+                        new_scen_dir = os.path.join("data", safe_project, new_safe_scen)
+                        if os.path.exists(old_scen_dir) and not os.path.exists(new_scen_dir):
+                            os.rename(old_scen_dir, new_scen_dir)
+                        
+                        st.session_state[rename_scenario_key] = False
+                        st.success(f"Scenario renamed to '{new_name}'.")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Error renaming scenario: {str(e)}")
+            
+            if st.button("Cancel scenario rename"):
+                st.session_state[rename_scenario_key] = False
+                st.rerun()
     with cdel4:
         if st.button("Delete scenario"):
             try:
