@@ -3748,9 +3748,13 @@ with tab_capex:
     st.session_state[capex_edit_key] = edited.copy()
     
     # Use edited data for display (but don't update scenario until Update is clicked)
-    edited_display = edited[~edited["Delete"]].copy() if "Delete" in edited.columns else edited.copy()
-    if "Delete" in edited_display.columns:
+    if "Delete" in edited.columns:
+        # Ensure Delete column is boolean before using ~ operator
+        delete_mask = edited["Delete"].astype(bool)
+        edited_display = edited[~delete_mask].copy()
         edited_display = edited_display.drop(columns=["Delete"])
+    else:
+        edited_display = edited.copy()
     
     # Show preview notice if there are unsaved changes
     current_saved = pd.DataFrame(s.capex.lines or [])
@@ -3772,8 +3776,12 @@ with tab_capex:
     with col_update:
         if st.button("🔄 Update CAPEX", type="primary", key=f"update_capex_{client_name}_{project_name}_{scenario_name}"):
             # Remove rows marked for deletion
-            edited_clean = edited[~edited["Delete"]].copy()
-            edited_clean = edited_clean.drop(columns=["Delete"])
+            if "Delete" in edited.columns:
+                delete_mask = edited["Delete"].astype(bool)
+                edited_clean = edited[~delete_mask].copy()
+                edited_clean = edited_clean.drop(columns=["Delete"])
+            else:
+                edited_clean = edited.copy()
             
             # Update scenario
             s.capex.lines = edited_clean.to_dict(orient="records")
