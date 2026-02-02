@@ -129,8 +129,29 @@ def _save_db(db: dict) -> None:
         # This shouldn't happen if migration is done properly, but be safe
         db = _migrate_to_clients(db)
     
-    with open(PROJECTS_FILE, "w", encoding="utf-8") as f:
-        json.dump(db, f, indent=2, ensure_ascii=False)
+    try:
+        # Ensure directory exists
+        file_dir = os.path.dirname(PROJECTS_FILE)
+        if file_dir and not os.path.exists(file_dir):
+            os.makedirs(file_dir, exist_ok=True)
+        
+        with open(PROJECTS_FILE, "w", encoding="utf-8") as f:
+            json.dump(db, f, indent=2, ensure_ascii=False)
+        
+        # Verify file was written
+        if os.path.exists(PROJECTS_FILE):
+            file_size = os.path.getsize(PROJECTS_FILE)
+            # Store save info in session state for debugging
+            st.session_state["_last_db_save"] = {
+                "file": PROJECTS_FILE,
+                "size": file_size,
+                "timestamp": datetime.now().isoformat()
+            }
+        else:
+            st.error(f"⚠️ Warning: Database file was not created at {PROJECTS_FILE}")
+    except Exception as e:
+        st.error(f"❌ Error saving database: {str(e)}")
+        raise
 
 
 def _migrate_to_clients(old_db: dict) -> dict:
@@ -2765,7 +2786,7 @@ with st.sidebar:
                                 pass
                         
                         st.session_state[delete_confirm_key] = False
-                        st.success(f"Project '{project_name}' deleted.")
+                        st.success(f"✓ Project '{project_name}' deleted successfully. Database saved.")
                         st.rerun()
                     except Exception as e:
                         st.error(f"Error deleting project: {str(e)}")
@@ -2925,9 +2946,10 @@ with st.sidebar:
             try:
                 del proj["scenarios"][scenario_name]
                 _save_db(db)
+                st.success(f"✓ Scenario '{scenario_name}' deleted successfully. Database saved.")
                 st.rerun()
-            except Exception:
-                st.error("Could not delete.")
+            except Exception as e:
+                st.error(f"Could not delete scenario: {str(e)}")
     
     st.divider()
     st.markdown("**Additional Scenario Actions:**")
@@ -3029,6 +3051,46 @@ with st.sidebar:
         # Note: Duplicate is already in cdel2, this is just for spacing
         st.empty()
 
+    st.divider()
+    
+    # Debug: Show database status
+    if st.checkbox("🔍 Show Database Status", key="show_db_status"):
+        st.markdown("---")
+        st.markdown("**Database Info:**")
+        st.text(f"File: {PROJECTS_FILE}")
+        st.text(f"Exists: {os.path.exists(PROJECTS_FILE)}")
+        if os.path.exists(PROJECTS_FILE):
+            file_size = os.path.getsize(PROJECTS_FILE)
+            st.text(f"Size: {file_size:,} bytes")
+            mod_time = datetime.fromtimestamp(os.path.getmtime(PROJECTS_FILE))
+            st.text(f"Modified: {mod_time.strftime('%Y-%m-%d %H:%M:%S')}")
+        
+        if "_last_db_save" in st.session_state:
+            last_save = st.session_state["_last_db_save"]
+            st.text(f"Last Save: {last_save['timestamp']}")
+            st.text(f"Saved Size: {last_save['size']:,} bytes")
+        
+        # Show database structure
+        st.markdown("**Database Structure:**")
+        clients = list(db.get("clients", {}).keys())
+        st.text(f"Clients: {len(clients)}")
+        for client_name in clients[:5]:  # Show first 5
+            projects = list(db["clients"][client_name].get("projects", {}).keys())
+            st.text(f"  - {client_name}: {len(projects)} projects")
+        if len(clients) > 5:
+            st.text(f"  ... and {len(clients) - 5} more")
+        
+        st.markdown("---")
+    
+    # Refresh Database button
+    if st.button("🔄 Refresh from Database", key="refresh_db"):
+        # Clear session state to force reload
+        for key in list(st.session_state.keys()):
+            if key.startswith("capex_edit_") or key.startswith("capex_hash_"):
+                del st.session_state[key]
+        st.success("Database refreshed. Reloading...")
+        st.rerun()
+    
     st.divider()
     st.subheader("Compare")
     compare_scenarios = st.multiselect("Select scenarios", scen_names, default=[])
