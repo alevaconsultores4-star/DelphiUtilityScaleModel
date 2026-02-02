@@ -3809,16 +3809,7 @@ with tab_capex:
     # Store edited data in session state (don't update scenario yet)
     st.session_state[capex_edit_key] = edited.copy()
     
-    # Use edited data for display (but don't update scenario until Update is clicked)
-    if "Delete" in edited.columns:
-        # Ensure Delete column is boolean before using ~ operator
-        delete_mask = edited["Delete"].astype(bool)
-        edited_display = edited[~delete_mask].copy()
-        edited_display = edited_display.drop(columns=["Delete"])
-    else:
-        edited_display = edited.copy()
-    
-    # Show preview notice if there are unsaved changes
+    # Show preview notice if there are unsaved changes (lightweight check only)
     current_saved = pd.DataFrame(s.capex.lines or [])
     if len(current_saved) > 0:
         for col in ["Item", "Amount_COP", "Phase"]:
@@ -3826,12 +3817,21 @@ with tab_capex:
                 current_saved[col] = "" if col != "Amount_COP" else 0.0
     current_saved = current_saved[["Item", "Amount_COP", "Phase"]].copy() if len(current_saved) > 0 else pd.DataFrame(columns=["Item", "Amount_COP", "Phase"])
     
+    # Get edited data for comparison (lightweight - no expensive calculations)
+    if "Delete" in edited.columns:
+        delete_mask = edited["Delete"].astype(bool)
+        edited_for_compare = edited[~delete_mask].copy()
+        if "Delete" in edited_for_compare.columns:
+            edited_for_compare = edited_for_compare.drop(columns=["Delete"])
+    else:
+        edited_for_compare = edited.copy()
+    
     # Compare (ignore order and handle empty dataframes)
-    edited_for_compare = edited_display[["Item", "Amount_COP", "Phase"]].copy() if len(edited_display) > 0 else pd.DataFrame(columns=["Item", "Amount_COP", "Phase"])
+    edited_for_compare = edited_for_compare[["Item", "Amount_COP", "Phase"]].copy() if len(edited_for_compare) > 0 else pd.DataFrame(columns=["Item", "Amount_COP", "Phase"])
     has_changes = not current_saved.equals(edited_for_compare)
     
     if has_changes:
-        st.info("ℹ️ **Preview mode**: Your changes are shown below but not saved yet. Click '🔄 Update CAPEX' to save changes.")
+        st.info("ℹ️ **Unsaved changes detected**. Check '📊 Show Preview' below to see calculations, or click '🔄 Update CAPEX' to save changes.")
     
     # Update button - only update scenario when clicked
     col_update, col_reset = st.columns([1, 1])
@@ -3881,6 +3881,26 @@ with tab_capex:
             reset_hash = hash(str(sorted([(x.get("Item", ""), x.get("Amount_COP", 0), x.get("Phase", "")) for x in s.capex.lines or []])))
             st.session_state[capex_hash_key] = reset_hash
             st.rerun()
+    
+    # ONLY calculate expensive previews if Update was just clicked OR if user wants to see preview
+    # Use saved data for display until Update is clicked (no lag on checkbox toggles)
+    
+    # Only show preview calculations if explicitly requested
+    show_preview_key = f"show_capex_preview_{client_name}_{project_name}_{scenario_name}"
+    show_preview = st.checkbox("📊 Show Preview of Changes", value=False, key=show_preview_key, help="Check this to see how your changes will affect calculations (may be slow)")
+    
+    if show_preview and has_changes:
+        # User wants to see preview - use edited data
+        if "Delete" in edited.columns:
+            delete_mask = edited["Delete"].astype(bool)
+            edited_display = edited[~delete_mask].copy()
+            if "Delete" in edited_display.columns:
+                edited_display = edited_display.drop(columns=["Delete"])
+        else:
+            edited_display = edited.copy()
+    else:
+        # Use saved data (no expensive calculations)
+        edited_display = current_saved.copy()
 
     total_capex = float(pd.to_numeric(edited_display["Amount_COP"], errors="coerce").fillna(0.0).sum())
     mwac = float(s.generation.mwac or 0.0)
@@ -3920,10 +3940,16 @@ with tab_capex:
             st.warning("⚠️ Chart unavailable")
     
     st.markdown("#### CAPEX schedule (monthly, aligned to timeline)")
-    # Create temporary scenario for preview with edited data
-    s_preview = _scenario_from_dict(_scenario_to_dict(s))
-    s_preview.capex.lines = edited_display.to_dict(orient="records")
-    sched = capex_monthly_schedule(s_preview)
+    # Only calculate expensive schedule if showing preview or if data is saved
+    if show_preview and has_changes:
+        # Create temporary scenario for preview with edited data
+        s_preview = _scenario_from_dict(_scenario_to_dict(s))
+        s_preview.capex.lines = edited_display.to_dict(orient="records")
+        sched = capex_monthly_schedule(s_preview)
+    else:
+        # Use saved scenario (already calculated, no lag)
+        sched = capex_monthly_schedule(s)
+    
     # Ensure CAPEX (COP) column is numeric and fill any NaN with 0
     sched["CAPEX (COP)"] = pd.to_numeric(sched["CAPEX (COP)"], errors="coerce").fillna(0.0)
     sched_disp = _df_format_money(sched.copy(), ["CAPEX (COP)"], decimals=0)
