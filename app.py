@@ -103,18 +103,52 @@ else:
 
 
 def _load_db() -> dict:
+    """Load database, supporting both old (projects) and new (clients) structures."""
     if os.path.exists(PROJECTS_FILE):
         try:
             with open(PROJECTS_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
+                db = json.load(f)
+                # Check if it's the new structure (has "clients" key)
+                if "clients" in db:
+                    return db
+                # Old structure (has "projects" key) - return as-is for migration
+                elif "projects" in db:
+                    return db
+                else:
+                    # Empty or invalid structure
+                    return {"clients": {}}
         except Exception:
-            return {"projects": {}}
-    return {"projects": {}}
+            return {"clients": {}}
+    return {"clients": {}}
 
 
 def _save_db(db: dict) -> None:
+    """Save database. Ensures it uses the new clients structure."""
+    # If somehow we have old structure, migrate it first
+    if "projects" in db and "clients" not in db:
+        # This shouldn't happen if migration is done properly, but be safe
+        db = _migrate_to_clients(db)
+    
     with open(PROJECTS_FILE, "w", encoding="utf-8") as f:
         json.dump(db, f, indent=2, ensure_ascii=False)
+
+
+def _migrate_to_clients(old_db: dict) -> dict:
+    """Migrate old structure (projects) to new structure (clients).
+    Returns new structure with all projects under a default client.
+    This is a helper - actual migration happens in UI."""
+    new_db = {"clients": {}}
+    if "projects" in old_db:
+        # Place all existing projects under "Default Client"
+        new_db["clients"]["Default Client"] = {
+            "projects": old_db["projects"]
+        }
+    return new_db
+
+
+def _needs_migration(db: dict) -> bool:
+    """Check if database needs migration from old to new structure."""
+    return "projects" in db and "clients" not in db
 
 
 # -----------------------------
@@ -630,14 +664,15 @@ def _get_tab_name(tab_var) -> str:
     return "unknown"
 
 
-def _get_upload_dir(project_name: str, scenario_name: str, tab_name: str) -> str:
+def _get_upload_dir(client_name: str, project_name: str, scenario_name: str, tab_name: str) -> str:
     """Get upload directory path for a tab, creating it if it doesn't exist."""
     # Sanitize names for filesystem (remove invalid characters)
+    safe_client = "".join(c for c in client_name if c.isalnum() or c in (' ', '-', '_')).strip()
     safe_project = "".join(c for c in project_name if c.isalnum() or c in (' ', '-', '_')).strip()
     safe_scenario = "".join(c for c in scenario_name if c.isalnum() or c in (' ', '-', '_')).strip()
     safe_tab = "".join(c for c in tab_name if c.isalnum() or c in (' ', '-', '_')).strip()
     
-    upload_dir = os.path.join("data", safe_project, safe_scenario, safe_tab, "uploads")
+    upload_dir = os.path.join("data", safe_client, safe_project, safe_scenario, safe_tab, "uploads")
     os.makedirs(upload_dir, exist_ok=True)
     return upload_dir
 
@@ -651,9 +686,9 @@ def _format_file_size(bytes_size: int) -> str:
     return f"{bytes_size:.1f} TB"
 
 
-def _save_uploaded_file(uploaded_file, project_name: str, scenario_name: str, tab_name: str) -> dict:
+def _save_uploaded_file(uploaded_file, client_name: str, project_name: str, scenario_name: str, tab_name: str) -> dict:
     """Save uploaded file to disk and return metadata."""
-    upload_dir = _get_upload_dir(project_name, scenario_name, tab_name)
+    upload_dir = _get_upload_dir(client_name, project_name, scenario_name, tab_name)
     
     # Handle duplicate filenames by appending timestamp
     original_filename = uploaded_file.name
@@ -696,7 +731,7 @@ def _delete_uploaded_file(filepath: str) -> bool:
         return False
 
 
-def _render_file_upload_section(s: ScenarioInputs, project_name: str, scenario_name: str, tab_name: str, section_title: str) -> None:
+def _render_file_upload_section(s: ScenarioInputs, client_name: str, project_name: str, scenario_name: str, tab_name: str, section_title: str) -> None:
     """Reusable UI component for file uploads."""
     st.markdown(f"#### {section_title}")
     st.info("ℹ️ Files uploaded here are for reference only and do not affect any financial calculations.")
@@ -711,26 +746,27 @@ def _render_file_upload_section(s: ScenarioInputs, project_name: str, scenario_n
     uploaded_file = st.file_uploader(
         "Upload file",
         type=None,  # Accept all file types
-        key=f"file_upload_{tab_name}_{project_name}_{scenario_name}",
+        key=f"file_upload_{tab_name}_{client_name}_{project_name}_{scenario_name}",
         help="Upload any file type for reference"
     )
     
     # Handle file upload
     if uploaded_file is not None:
         # Track processed files using session state to prevent duplicates
-        upload_state_key = f"last_uploaded_{tab_name}_{project_name}_{scenario_name}"
+        upload_state_key = f"last_uploaded_{tab_name}_{client_name}_{project_name}_{scenario_name}"
         file_id = f"{uploaded_file.name}_{uploaded_file.size}"
         last_processed = st.session_state.get(upload_state_key, None)
         
         # Only process if this is a new/different file
         if last_processed != file_id:
             try:
-                file_metadata = _save_uploaded_file(uploaded_file, project_name, scenario_name, tab_name)
+                file_metadata = _save_uploaded_file(uploaded_file, client_name, project_name, scenario_name, tab_name)
                 s.uploaded_files[tab_name].append(file_metadata)
                 
                 # Save to database
                 db = _load_db()
-                proj = db["projects"].setdefault(project_name, {"scenarios": {}})
+                client = db["clients"].setdefault(client_name, {"projects": {}})
+                proj = client["projects"].setdefault(project_name, {"scenarios": {}})
                 proj["scenarios"][scenario_name] = _scenario_to_dict(s)
                 _save_db(db)
                 
@@ -758,7 +794,8 @@ def _render_file_upload_section(s: ScenarioInputs, project_name: str, scenario_n
     if len(valid_files) != len(files):
         s.uploaded_files[tab_name] = valid_files
         db = _load_db()
-        proj = db["projects"].setdefault(project_name, {"scenarios": {}})
+        client = db["clients"].setdefault(client_name, {"projects": {}})
+        proj = client["projects"].setdefault(project_name, {"scenarios": {}})
         proj["scenarios"][scenario_name] = _scenario_to_dict(s)
         _save_db(db)
         files = valid_files
@@ -806,7 +843,8 @@ def _render_file_upload_section(s: ScenarioInputs, project_name: str, scenario_n
                         
                         # Save to database
                         db = _load_db()
-                        proj = db["projects"].setdefault(project_name, {"scenarios": {}})
+                        client = db["clients"].setdefault(client_name, {"projects": {}})
+                        proj = client["projects"].setdefault(project_name, {"scenarios": {}})
                         proj["scenarios"][scenario_name] = _scenario_to_dict(s)
                         _save_db(db)
                         
@@ -2555,25 +2593,143 @@ No es: modelo bancario final ni reemplazo de debida diligencia.
 
 db = _load_db()
 
-# Sidebar: project & scenario management
-with st.sidebar:
-    st.header("Project & Scenario")
+# Migration: Check if we need to migrate from old structure to new
+if _needs_migration(db):
+    with st.sidebar:
+        st.header("⚠️ Database Migration Required")
+        st.info("Your database needs to be migrated to support clients. Please assign your existing projects to clients.")
+        
+        old_projects = list(db.get("projects", {}).keys())
+        if not old_projects:
+            # No projects to migrate, just convert structure
+            db = {"clients": {}}
+            _save_db(db)
+            st.rerun()
+        
+        st.markdown(f"**Found {len(old_projects)} project(s) to migrate:**")
+        
+        # Track migration assignments
+        migration_key = "migration_assignments"
+        if migration_key not in st.session_state:
+            st.session_state[migration_key] = {proj: "" for proj in old_projects}
+        
+        # Create clients list
+        new_clients = []
+        for project in old_projects:
+            st.markdown(f"**{project}**")
+            col1, col2 = st.columns([2, 1])
+            with col1:
+                # Show existing clients or allow creating new
+                existing_clients = list(st.session_state.get("migration_new_clients", []))
+                client_options = ["(Create new client)"] + existing_clients
+                selected_client = st.selectbox(
+                    f"Assign to client:",
+                    client_options,
+                    key=f"migrate_client_{project}",
+                    index=0 if st.session_state[migration_key].get(project, "") not in existing_clients else existing_clients.index(st.session_state[migration_key].get(project, "")) + 1
+                )
+                
+                if selected_client == "(Create new client)":
+                    new_client_name = st.text_input(
+                        f"New client name for {project}:",
+                        key=f"new_client_{project}",
+                        value=""
+                    )
+                    if new_client_name.strip():
+                        if "migration_new_clients" not in st.session_state:
+                            st.session_state["migration_new_clients"] = []
+                        if new_client_name.strip() not in st.session_state["migration_new_clients"]:
+                            st.session_state["migration_new_clients"].append(new_client_name.strip())
+                        st.session_state[migration_key][project] = new_client_name.strip()
+                else:
+                    st.session_state[migration_key][project] = selected_client
+        
+        st.divider()
+        
+        # Migration button
+        if st.button("Complete Migration", type="primary"):
+            # Perform migration
+            new_db = {"clients": {}}
+            assignments = st.session_state[migration_key]
+            
+            for project_name, client_name in assignments.items():
+                if not client_name.strip():
+                    st.error(f"Please assign '{project_name}' to a client.")
+                    st.stop()
+                
+                # Create client if doesn't exist
+                if client_name not in new_db["clients"]:
+                    new_db["clients"][client_name] = {"projects": {}}
+                
+                # Move project to client
+                if project_name in db["projects"]:
+                    new_db["clients"][client_name]["projects"][project_name] = db["projects"][project_name]
+                    
+                    # Migrate file paths
+                    safe_project = "".join(c for c in project_name if c.isalnum() or c in (' ', '-', '_')).strip()
+                    old_project_dir = os.path.join("data", safe_project)
+                    if os.path.exists(old_project_dir):
+                        safe_client = "".join(c for c in client_name if c.isalnum() or c in (' ', '-', '_')).strip()
+                        new_project_dir = os.path.join("data", safe_client, safe_project)
+                        os.makedirs(os.path.dirname(new_project_dir), exist_ok=True)
+                        try:
+                            if not os.path.exists(new_project_dir):
+                                shutil.move(old_project_dir, new_project_dir)
+                        except Exception as e:
+                            st.warning(f"Could not move files for {project_name}: {str(e)}")
+            
+            # Save new structure
+            db = new_db
+            _save_db(db)
+            
+            # Clear migration state
+            if migration_key in st.session_state:
+                del st.session_state[migration_key]
+            if "migration_new_clients" in st.session_state:
+                del st.session_state["migration_new_clients"]
+            
+            st.success("Migration completed successfully!")
+            st.rerun()
+        
+        st.stop()
 
-    projects = sorted(list(db.get("projects", {}).keys()))
+# Sidebar: client, project & scenario management
+with st.sidebar:
+    st.header("Client, Project & Scenario")
+
+    # Client selection
+    clients = sorted(list(db.get("clients", {}).keys()))
+    client_name = st.selectbox("Client", ["(New client)"] + clients, index=0)
+    
+    if client_name == "(New client)":
+        new_client = st.text_input("New client name", value="")
+        if st.button("Create client", type="primary"):
+            if new_client.strip():
+                db.setdefault("clients", {}).setdefault(new_client.strip(), {"projects": {}})
+                _save_db(db)
+                st.rerun()
+            else:
+                st.warning("Enter a client name.")
+        st.stop()
+    
+    client = db["clients"].setdefault(client_name, {"projects": {}})
+    
+    # Project selection (filtered by client)
+    projects = sorted(list(client.get("projects", {}).keys()))
     project_name = st.selectbox("Project", ["(New project)"] + projects, index=0)
 
     if project_name == "(New project)":
         new_project = st.text_input("New project name", value="")
         if st.button("Create project", type="primary"):
             if new_project.strip():
-                db.setdefault("projects", {}).setdefault(new_project.strip(), {"scenarios": {}})
+                client.setdefault("projects", {}).setdefault(new_project.strip(), {"scenarios": {}})
                 _save_db(db)
                 st.rerun()
             else:
                 st.warning("Enter a project name.")
         st.stop()
 
-    proj = db["projects"].setdefault(project_name, {"scenarios": {}})
+    proj = client["projects"].setdefault(project_name, {"scenarios": {}})
     
     # Delete project functionality with verification
     if len(projects) > 0:
@@ -2594,12 +2750,13 @@ with st.sidebar:
                 if confirm_text.strip().lower() == project_name.strip().lower():
                     try:
                         # Delete project from database
-                        del db["projects"][project_name]
+                        del client["projects"][project_name]
                         _save_db(db)
                         
                         # Clean up uploaded files in data directory
+                        safe_client = "".join(c for c in client_name if c.isalnum() or c in (' ', '-', '_')).strip()
                         safe_project = "".join(c for c in project_name if c.isalnum() or c in (' ', '-', '_')).strip()
-                        project_data_dir = os.path.join("data", safe_project)
+                        project_data_dir = os.path.join("data", safe_client, safe_project)
                         if os.path.exists(project_data_dir):
                             try:
                                 shutil.rmtree(project_data_dir)
@@ -2641,19 +2798,20 @@ with st.sidebar:
                     st.error("Project name cannot be empty.")
                 elif new_name == project_name:
                     st.error("New name must be different from current name.")
-                elif new_name in db["projects"]:
+                elif new_name in client["projects"]:
                     st.error(f"Project '{new_name}' already exists.")
                 else:
                     try:
                         # Rename in database
-                        db["projects"][new_name] = db["projects"].pop(project_name)
+                        client["projects"][new_name] = client["projects"].pop(project_name)
                         _save_db(db)
                         
                         # Rename file directory
+                        safe_client = "".join(c for c in client_name if c.isalnum() or c in (' ', '-', '_')).strip()
                         old_safe = "".join(c for c in project_name if c.isalnum() or c in (' ', '-', '_')).strip()
                         new_safe = "".join(c for c in new_name if c.isalnum() or c in (' ', '-', '_')).strip()
-                        old_dir = os.path.join("data", old_safe)
-                        new_dir = os.path.join("data", new_safe)
+                        old_dir = os.path.join("data", safe_client, old_safe)
+                        new_dir = os.path.join("data", safe_client, new_safe)
                         if os.path.exists(old_dir) and not os.path.exists(new_dir):
                             os.rename(old_dir, new_dir)
                         
@@ -2744,11 +2902,12 @@ with st.sidebar:
                         _save_db(db)
                         
                         # Rename scenario directory for uploads
+                        safe_client = "".join(c for c in client_name if c.isalnum() or c in (' ', '-', '_')).strip()
                         safe_project = "".join(c for c in project_name if c.isalnum() or c in (' ', '-', '_')).strip()
                         old_safe_scen = "".join(c for c in scenario_name if c.isalnum() or c in (' ', '-', '_')).strip()
                         new_safe_scen = "".join(c for c in new_name if c.isalnum() or c in (' ', '-', '_')).strip()
-                        old_scen_dir = os.path.join("data", safe_project, old_safe_scen)
-                        new_scen_dir = os.path.join("data", safe_project, new_safe_scen)
+                        old_scen_dir = os.path.join("data", safe_client, safe_project, old_safe_scen)
+                        new_scen_dir = os.path.join("data", safe_client, safe_project, new_safe_scen)
                         if os.path.exists(old_scen_dir) and not os.path.exists(new_scen_dir):
                             os.rename(old_scen_dir, new_scen_dir)
                         
@@ -2769,12 +2928,113 @@ with st.sidebar:
                 st.rerun()
             except Exception:
                 st.error("Could not delete.")
+    
+    st.divider()
+    st.markdown("**Additional Scenario Actions:**")
+    cact1, cact2, cact3 = st.columns(3)
+    
+    with cact1:
+        # Clone as template
+        if st.button("📋 Clone as Template"):
+            template_name = f"{scenario_name}_Template"
+            counter = 1
+            while template_name in proj["scenarios"]:
+                counter += 1
+                template_name = f"{scenario_name}_Template_{counter}"
+            
+            # Copy scenario data
+            template_dict = _scenario_to_dict(s)
+            template_dict["name"] = template_name
+            proj["scenarios"][template_name] = template_dict
+            _save_db(db)
+            st.success(f"Scenario cloned as template '{template_name}'")
+            st.rerun()
+    
+    with cact2:
+        # Create scenario into new project
+        create_new_proj_key = f"create_new_proj_{scenario_name}"
+        if create_new_proj_key not in st.session_state:
+            st.session_state[create_new_proj_key] = False
+        
+        if st.button("🆕 Create into New Project"):
+            st.session_state[create_new_proj_key] = True
+        
+        if st.session_state[create_new_proj_key]:
+            new_proj_name = st.text_input(
+                "New project name:",
+                key=f"new_proj_name_{scenario_name}",
+                value=""
+            )
+            # Allow selecting target client (default: same client)
+            target_clients = sorted(list(db.get("clients", {}).keys()))
+            target_client = st.selectbox(
+                "Target client:",
+                target_clients,
+                index=0 if client_name not in target_clients else target_clients.index(client_name),
+                key=f"target_client_{scenario_name}"
+            )
+            
+            if st.button("Create Project & Copy Scenario", type="primary", key=f"confirm_new_proj_{scenario_name}"):
+                if not new_proj_name.strip():
+                    st.error("Enter a project name.")
+                else:
+                    try:
+                        target_client_obj = db["clients"].setdefault(target_client, {"projects": {}})
+                        if new_proj_name.strip() in target_client_obj["projects"]:
+                            st.error(f"Project '{new_proj_name.strip()}' already exists in '{target_client}'.")
+                        else:
+                            # Create new project
+                            target_client_obj["projects"][new_proj_name.strip()] = {"scenarios": {}}
+                            
+                            # Copy scenario to new project
+                            new_scenario_name = scenario_name
+                            counter = 1
+                            while new_scenario_name in target_client_obj["projects"][new_proj_name.strip()]["scenarios"]:
+                                counter += 1
+                                new_scenario_name = f"{scenario_name} {counter}"
+                            
+                            new_scenario_dict = _scenario_to_dict(s)
+                            new_scenario_dict["name"] = new_scenario_name
+                            target_client_obj["projects"][new_proj_name.strip()]["scenarios"][new_scenario_name] = new_scenario_dict
+                            
+                            # Copy file uploads if they exist
+                            safe_client_old = "".join(c for c in client_name if c.isalnum() or c in (' ', '-', '_')).strip()
+                            safe_project_old = "".join(c for c in project_name if c.isalnum() or c in (' ', '-', '_')).strip()
+                            safe_scenario_old = "".join(c for c in scenario_name if c.isalnum() or c in (' ', '-', '_')).strip()
+                            old_upload_dir = os.path.join("data", safe_client_old, safe_project_old, safe_scenario_old)
+                            
+                            safe_client_new = "".join(c for c in target_client if c.isalnum() or c in (' ', '-', '_')).strip()
+                            safe_project_new = "".join(c for c in new_proj_name.strip() if c.isalnum() or c in (' ', '-', '_')).strip()
+                            safe_scenario_new = "".join(c for c in new_scenario_name if c.isalnum() or c in (' ', '-', '_')).strip()
+                            new_upload_dir = os.path.join("data", safe_client_new, safe_project_new, safe_scenario_new)
+                            
+                            if os.path.exists(old_upload_dir) and not os.path.exists(new_upload_dir):
+                                try:
+                                    shutil.copytree(old_upload_dir, new_upload_dir)
+                                except Exception:
+                                    pass  # File copy is optional
+                            
+                            _save_db(db)
+                            st.session_state[create_new_proj_key] = False
+                            st.success(f"Created project '{new_proj_name.strip()}' with scenario '{new_scenario_name}'")
+                            st.rerun()
+                    except Exception as e:
+                        st.error(f"Error creating project: {str(e)}")
+            
+            if st.button("Cancel", key=f"cancel_new_proj_{scenario_name}"):
+                st.session_state[create_new_proj_key] = False
+                st.rerun()
+    
+    with cact3:
+        # Note: Duplicate is already in cdel2, this is just for spacing
+        st.empty()
 
     st.divider()
     st.subheader("Compare")
     compare_scenarios = st.multiselect("Select scenarios", scen_names, default=[])
 
-# Title and Project/Scenario Names (after sidebar so variables are available)
+# Title and Client/Project/Scenario Names (after sidebar so variables are available)
+st.markdown(f"<p style='font-size: 1.2rem; font-weight: 600; color: #1f4e79;'><strong>Client:</strong> {client_name}</p>", unsafe_allow_html=True)
 st.markdown(f"<p style='font-size: 1.3rem; font-weight: 600; color: #1f4e79;'><strong>Project Name:</strong> {project_name}</p>", unsafe_allow_html=True)
 st.markdown(f"<p style='font-size: 1.3rem; font-weight: 600; color: #1f4e79;'><strong>Scenario Name:</strong> {scenario_name}</p>", unsafe_allow_html=True)
 st.markdown("<br>", unsafe_allow_html=True)  # Add spacing
@@ -3168,7 +3428,7 @@ with tab_gen:
         st.warning("⚠️ Chart unavailable")
     
     # File upload section
-    _render_file_upload_section(s, project_name, scenario_name, "generation", "Reference Files (PVSyst / Simulation / Documents)")
+    _render_file_upload_section(s, client_name, project_name, scenario_name, "generation", "Reference Files (PVSyst / Simulation / Documents)")
 
 
 # -----------------------------
@@ -3428,7 +3688,7 @@ with tab_rev:
     st.dataframe(disp, use_container_width=True, hide_index=True)
     
     # File upload section
-    _render_file_upload_section(s, project_name, scenario_name, "revenues", "Reference Files (PPA / Contracts / Documents)")
+    _render_file_upload_section(s, client_name, project_name, scenario_name, "revenues", "Reference Files (PPA / Contracts / Documents)")
 
 
 # -----------------------------
@@ -3516,7 +3776,7 @@ with tab_capex:
     st.dataframe(ann_disp, use_container_width=True, hide_index=True)
     
     # File upload section
-    _render_file_upload_section(s, project_name, scenario_name, "capex", "Reference Files (Quotes / Contracts / Documents)")
+    _render_file_upload_section(s, client_name, project_name, scenario_name, "capex", "Reference Files (Quotes / Contracts / Documents)")
 
 
 # -----------------------------
@@ -3612,7 +3872,7 @@ with tab_opex:
     st.dataframe(disp, use_container_width=True, hide_index=True)
     
     # File upload section
-    _render_file_upload_section(s, project_name, scenario_name, "opex", "Reference Files (Quotes / Contracts / Documents)")
+    _render_file_upload_section(s, client_name, project_name, scenario_name, "opex", "Reference Files (Quotes / Contracts / Documents)")
 
 
 # -----------------------------
