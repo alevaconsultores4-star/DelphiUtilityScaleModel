@@ -31,4 +31,5 @@ Thumbs.db
 # Data (ignore real data, commit templates)
 data/*.json
 !data/.gitkeep
+!data/delphi_projects.json  # Allow database file to be committed
 !data/*.example.json
