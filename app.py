@@ -3701,8 +3701,16 @@ with tab_capex:
 
     # Initialize session state for CAPEX editing
     capex_edit_key = f"capex_edit_{client_name}_{project_name}_{scenario_name}"
-    if capex_edit_key not in st.session_state:
-        capex_df = pd.DataFrame(s.capex.lines or [])
+    capex_hash_key = f"capex_hash_{client_name}_{project_name}_{scenario_name}"
+    
+    # Get current saved data from database
+    current_saved_lines = s.capex.lines or []
+    current_hash = hash(str(sorted([(x.get("Item", ""), x.get("Amount_COP", 0), x.get("Phase", "")) for x in current_saved_lines])))
+    
+    # Check if database has been updated (hash changed) or session state doesn't exist
+    if capex_edit_key not in st.session_state or st.session_state.get(capex_hash_key) != current_hash:
+        # Initialize or refresh from database
+        capex_df = pd.DataFrame(current_saved_lines)
         for col in ["Item", "Amount_COP", "Phase"]:
             if col not in capex_df.columns:
                 capex_df[col] = "" if col != "Amount_COP" else 0.0
@@ -3710,6 +3718,7 @@ with tab_capex:
         capex_df["Phase"] = capex_df["Phase"].where(capex_df["Phase"].isin(CAPEX_PHASES), "Construction")
         capex_df["Delete"] = False
         st.session_state[capex_edit_key] = capex_df
+        st.session_state[capex_hash_key] = current_hash
     else:
         capex_df = st.session_state[capex_edit_key].copy()
     
@@ -3737,6 +3746,11 @@ with tab_capex:
     
     # Store edited data in session state (don't update scenario yet)
     st.session_state[capex_edit_key] = edited.copy()
+    
+    # Use edited data for display (but don't update scenario until Update is clicked)
+    edited_display = edited[~edited["Delete"]].copy() if "Delete" in edited.columns else edited.copy()
+    if "Delete" in edited_display.columns:
+        edited_display = edited_display.drop(columns=["Delete"])
     
     # Show preview notice if there are unsaved changes
     current_saved = pd.DataFrame(s.capex.lines or [])
@@ -3775,6 +3789,10 @@ with tab_capex:
             edited_clean["Delete"] = False
             st.session_state[capex_edit_key] = edited_clean[["Delete", "Item", "Amount_COP", "Phase"]].copy()
             
+            # Update hash to match new saved state
+            new_hash = hash(str(sorted([(x.get("Item", ""), x.get("Amount_COP", 0), x.get("Phase", "")) for x in edited_clean.to_dict(orient="records")])))
+            st.session_state[capex_hash_key] = new_hash
+            
             st.success("CAPEX updated successfully!")
             st.rerun()
     
@@ -3789,12 +3807,10 @@ with tab_capex:
             capex_df_reset["Phase"] = capex_df_reset["Phase"].where(capex_df_reset["Phase"].isin(CAPEX_PHASES), "Construction")
             capex_df_reset["Delete"] = False
             st.session_state[capex_edit_key] = capex_df_reset[["Delete", "Item", "Amount_COP", "Phase"]].copy()
+            # Reset hash to match current saved state
+            reset_hash = hash(str(sorted([(x.get("Item", ""), x.get("Amount_COP", 0), x.get("Phase", "")) for x in s.capex.lines or []])))
+            st.session_state[capex_hash_key] = reset_hash
             st.rerun()
-    
-    # Use edited data for display (but don't update scenario until Update is clicked)
-    edited_display = edited[~edited["Delete"]].copy() if "Delete" in edited.columns else edited.copy()
-    if "Delete" in edited_display.columns:
-        edited_display = edited_display.drop(columns=["Delete"])
 
     total_capex = float(pd.to_numeric(edited_display["Amount_COP"], errors="coerce").fillna(0.0).sum())
     mwac = float(s.generation.mwac or 0.0)
