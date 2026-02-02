@@ -1544,14 +1544,16 @@ def cashflow_monthly_table(s: ScenarioInputs) -> pd.DataFrame:
     base["Cumulative Unlevered CF (Cash, COP)"] = base["Unlevered CF (Cash, COP)"].cumsum()
 
     # -----------------------------
-    # Debt fees (cash) — only when there is debt
+    # Debt fees (cash) — only when there is debt AND debt is enabled
     # -----------------------------
     base["Debt Fees (COP)"] = 0.0
 
-    debt_amt = (float(s.debt.debt_pct_of_capex) / 100.0) * _total_capex_from_lines(s)
+    # Check if debt is enabled first
+    debt_enabled = bool(getattr(s.debt, "enabled", False))
+    debt_amt = (float(s.debt.debt_pct_of_capex) / 100.0) * _total_capex_from_lines(s) if debt_enabled else 0.0
     debt_amt = max(debt_amt, 0.0)
 
-    if debt_amt > 0:
+    if debt_enabled and debt_amt > 0:
         # 1) Commitment fee (annual -> spread monthly)
         cf_ann = debt_commitment_fee_annual(s).copy()  # expects columns: Year, Commitment Fee (COP)
         if (not cf_ann.empty) and ("Year" in cf_ann.columns) and ("Commitment Fee (COP)" in cf_ann.columns):
@@ -3048,8 +3050,80 @@ with st.sidebar:
                 st.rerun()
     
     with cact3:
-        # Note: Duplicate is already in cdel2, this is just for spacing
-        st.empty()
+        # Copy scenario to existing project
+        copy_to_existing_key = f"copy_to_existing_{scenario_name}"
+        if copy_to_existing_key not in st.session_state:
+            st.session_state[copy_to_existing_key] = False
+        
+        if st.button("📁 Copy to Existing Project"):
+            st.session_state[copy_to_existing_key] = True
+        
+        if st.session_state[copy_to_existing_key]:
+            # Build list of all existing projects across all clients
+            all_projects = []
+            for c_name, c_data in db.get("clients", {}).items():
+                for p_name in c_data.get("projects", {}).keys():
+                    # Skip current project
+                    if not (c_name == client_name and p_name == project_name):
+                        all_projects.append((c_name, p_name))
+            
+            if not all_projects:
+                st.warning("No other projects available to copy to.")
+            else:
+                # Create display names for selectbox
+                project_options = [f"{c} > {p}" for c, p in all_projects]
+                
+                selected_index = st.selectbox(
+                    "Select target project:",
+                    project_options,
+                    key=f"target_existing_proj_{scenario_name}"
+                )
+                
+                if selected_index is not None and st.button("Copy Scenario", type="primary", key=f"confirm_copy_existing_{scenario_name}"):
+                    try:
+                        # Get selected client and project
+                        selected_client, selected_project = all_projects[project_options.index(selected_index)]
+                        target_client_obj = db["clients"].setdefault(selected_client, {"projects": {}})
+                        target_project_obj = target_client_obj["projects"].setdefault(selected_project, {"scenarios": {}})
+                        
+                        # Copy scenario to existing project
+                        new_scenario_name = scenario_name
+                        counter = 1
+                        while new_scenario_name in target_project_obj["scenarios"]:
+                            counter += 1
+                            new_scenario_name = f"{scenario_name} {counter}"
+                        
+                        new_scenario_dict = _scenario_to_dict(s)
+                        new_scenario_dict["name"] = new_scenario_name
+                        target_project_obj["scenarios"][new_scenario_name] = new_scenario_dict
+                        
+                        # Copy file uploads if they exist
+                        safe_client_old = "".join(c for c in client_name if c.isalnum() or c in (' ', '-', '_')).strip()
+                        safe_project_old = "".join(c for c in project_name if c.isalnum() or c in (' ', '-', '_')).strip()
+                        safe_scenario_old = "".join(c for c in scenario_name if c.isalnum() or c in (' ', '-', '_')).strip()
+                        old_upload_dir = os.path.join("data", safe_client_old, safe_project_old, safe_scenario_old)
+                        
+                        safe_client_new = "".join(c for c in selected_client if c.isalnum() or c in (' ', '-', '_')).strip()
+                        safe_project_new = "".join(c for c in selected_project if c.isalnum() or c in (' ', '-', '_')).strip()
+                        safe_scenario_new = "".join(c for c in new_scenario_name if c.isalnum() or c in (' ', '-', '_')).strip()
+                        new_upload_dir = os.path.join("data", safe_client_new, safe_project_new, safe_scenario_new)
+                        
+                        if os.path.exists(old_upload_dir) and not os.path.exists(new_upload_dir):
+                            try:
+                                shutil.copytree(old_upload_dir, new_upload_dir)
+                            except Exception:
+                                pass  # File copy is optional
+                        
+                        _save_db(db)
+                        st.session_state[copy_to_existing_key] = False
+                        st.success(f"Scenario copied to '{selected_client} > {selected_project}' as '{new_scenario_name}'")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Error copying scenario: {str(e)}")
+            
+            if st.button("Cancel", key=f"cancel_copy_existing_{scenario_name}"):
+                st.session_state[copy_to_existing_key] = False
+                st.rerun()
 
     st.divider()
     
