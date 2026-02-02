@@ -3699,11 +3699,26 @@ with tab_capex:
 
     s.capex.distribution = st.selectbox("Construction spend distribution", CAPEX_DISTS, index=CAPEX_DISTS.index(s.capex.distribution) if s.capex.distribution in CAPEX_DISTS else 0)
 
-    capex_df = pd.DataFrame(s.capex.lines or [])
-    for col in ["Item", "Amount_COP", "Phase"]:
-        if col not in capex_df.columns:
-            capex_df[col] = "" if col != "Amount_COP" else 0.0
-    capex_df = capex_df[["Item", "Amount_COP", "Phase"]].copy()
+    # Initialize session state for CAPEX editing
+    capex_edit_key = f"capex_edit_{client_name}_{project_name}_{scenario_name}"
+    if capex_edit_key not in st.session_state:
+        capex_df = pd.DataFrame(s.capex.lines or [])
+        for col in ["Item", "Amount_COP", "Phase"]:
+            if col not in capex_df.columns:
+                capex_df[col] = "" if col != "Amount_COP" else 0.0
+        capex_df = capex_df[["Item", "Amount_COP", "Phase"]].copy()
+        capex_df["Phase"] = capex_df["Phase"].where(capex_df["Phase"].isin(CAPEX_PHASES), "Construction")
+        capex_df["Delete"] = False
+        st.session_state[capex_edit_key] = capex_df
+    else:
+        capex_df = st.session_state[capex_edit_key].copy()
+    
+    # Ensure Delete column exists
+    if "Delete" not in capex_df.columns:
+        capex_df["Delete"] = False
+    
+    # Reorder columns to show Delete first
+    capex_df = capex_df[["Delete", "Item", "Amount_COP", "Phase"]].copy()
     capex_df["Phase"] = capex_df["Phase"].where(capex_df["Phase"].isin(CAPEX_PHASES), "Construction")
 
     edited = st.data_editor(
@@ -3712,14 +3727,76 @@ with tab_capex:
         hide_index=True,
         num_rows="dynamic",
         column_config={
+            "Delete": st.column_config.CheckboxColumn("Delete", help="Check to delete this row"),
             "Item": st.column_config.TextColumn("CAPEX line item"),
             "Amount_COP": st.column_config.NumberColumn("Amount (COP)", min_value=0.0, step=1_000_000.0, format="%.0f"),
             "Phase": st.column_config.SelectboxColumn("Phase", options=CAPEX_PHASES),
         },
+        key=f"capex_editor_{client_name}_{project_name}_{scenario_name}",
     )
-    s.capex.lines = edited.to_dict(orient="records")
+    
+    # Store edited data in session state (don't update scenario yet)
+    st.session_state[capex_edit_key] = edited.copy()
+    
+    # Show preview notice if there are unsaved changes
+    current_saved = pd.DataFrame(s.capex.lines or [])
+    if len(current_saved) > 0:
+        for col in ["Item", "Amount_COP", "Phase"]:
+            if col not in current_saved.columns:
+                current_saved[col] = "" if col != "Amount_COP" else 0.0
+    current_saved = current_saved[["Item", "Amount_COP", "Phase"]].copy() if len(current_saved) > 0 else pd.DataFrame(columns=["Item", "Amount_COP", "Phase"])
+    
+    # Compare (ignore order and handle empty dataframes)
+    edited_for_compare = edited_display[["Item", "Amount_COP", "Phase"]].copy() if len(edited_display) > 0 else pd.DataFrame(columns=["Item", "Amount_COP", "Phase"])
+    has_changes = not current_saved.equals(edited_for_compare)
+    
+    if has_changes:
+        st.info("ℹ️ **Preview mode**: Your changes are shown below but not saved yet. Click '🔄 Update CAPEX' to save changes.")
+    
+    # Update button - only update scenario when clicked
+    col_update, col_reset = st.columns([1, 1])
+    with col_update:
+        if st.button("🔄 Update CAPEX", type="primary", key=f"update_capex_{client_name}_{project_name}_{scenario_name}"):
+            # Remove rows marked for deletion
+            edited_clean = edited[~edited["Delete"]].copy()
+            edited_clean = edited_clean.drop(columns=["Delete"])
+            
+            # Update scenario
+            s.capex.lines = edited_clean.to_dict(orient="records")
+            
+            # Save to database
+            db = _load_db()
+            client = db["clients"].setdefault(client_name, {"projects": {}})
+            proj = client["projects"].setdefault(project_name, {"scenarios": {}})
+            proj["scenarios"][scenario_name] = _scenario_to_dict(s)
+            _save_db(db)
+            
+            # Update session state with cleaned data
+            edited_clean["Delete"] = False
+            st.session_state[capex_edit_key] = edited_clean[["Delete", "Item", "Amount_COP", "Phase"]].copy()
+            
+            st.success("CAPEX updated successfully!")
+            st.rerun()
+    
+    with col_reset:
+        if st.button("↩️ Reset Changes", key=f"reset_capex_{client_name}_{project_name}_{scenario_name}"):
+            # Reset to original data
+            capex_df_reset = pd.DataFrame(s.capex.lines or [])
+            for col in ["Item", "Amount_COP", "Phase"]:
+                if col not in capex_df_reset.columns:
+                    capex_df_reset[col] = "" if col != "Amount_COP" else 0.0
+            capex_df_reset = capex_df_reset[["Item", "Amount_COP", "Phase"]].copy()
+            capex_df_reset["Phase"] = capex_df_reset["Phase"].where(capex_df_reset["Phase"].isin(CAPEX_PHASES), "Construction")
+            capex_df_reset["Delete"] = False
+            st.session_state[capex_edit_key] = capex_df_reset[["Delete", "Item", "Amount_COP", "Phase"]].copy()
+            st.rerun()
+    
+    # Use edited data for display (but don't update scenario until Update is clicked)
+    edited_display = edited[~edited["Delete"]].copy() if "Delete" in edited.columns else edited.copy()
+    if "Delete" in edited_display.columns:
+        edited_display = edited_display.drop(columns=["Delete"])
 
-    total_capex = float(pd.to_numeric(edited["Amount_COP"], errors="coerce").fillna(0.0).sum())
+    total_capex = float(pd.to_numeric(edited_display["Amount_COP"], errors="coerce").fillna(0.0).sum())
     mwac = float(s.generation.mwac or 0.0)
     mwp = float(s.generation.mwp or 0.0)
     capex_per_mwac = (total_capex / mwac) if mwac > 0 else np.nan
@@ -3731,7 +3808,7 @@ with tab_capex:
     c3.metric("CAPEX / MWp (COP)", _fmt_cop(capex_per_mwp) if np.isfinite(capex_per_mwp) else "—")
 
     st.markdown("#### CAPEX breakdown (by line item)")
-    capex_pie = edited.copy()
+    capex_pie = edited_display.copy()
     capex_pie["Item"] = capex_pie["Item"].fillna("").astype(str).str.strip()
     capex_pie["Amount_COP"] = pd.to_numeric(capex_pie["Amount_COP"], errors="coerce").fillna(0.0)
     capex_pie = capex_pie[capex_pie["Amount_COP"] > 0].copy()
@@ -3757,7 +3834,10 @@ with tab_capex:
             st.warning("⚠️ Chart unavailable")
     
     st.markdown("#### CAPEX schedule (monthly, aligned to timeline)")
-    sched = capex_monthly_schedule(s)
+    # Create temporary scenario for preview with edited data
+    s_preview = _scenario_from_dict(_scenario_to_dict(s))
+    s_preview.capex.lines = edited_display.to_dict(orient="records")
+    sched = capex_monthly_schedule(s_preview)
     # Ensure CAPEX (COP) column is numeric and fill any NaN with 0
     sched["CAPEX (COP)"] = pd.to_numeric(sched["CAPEX (COP)"], errors="coerce").fillna(0.0)
     sched_disp = _df_format_money(sched.copy(), ["CAPEX (COP)"], decimals=0)
