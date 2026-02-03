@@ -3374,17 +3374,17 @@ if show_dashboard:
             if not scenarios:
                 # Project with no scenarios - show placeholder
                 summary_data.append({
-                "Project": proj_name,
-                "Scenario": "(No scenarios)",
-                "Total CAPEX (COP)": "—",
-                "Starting PPA Price (COP/kWh)": "—",
-                "Total MWh/year": "—",
-                "MWp": "—",
-                "Avg OPEX/Revenue (%)": "—",
-                "Unlevered IRR (%)": "—",
-                "Levered IRR (%)": "—",
-            })
-        else:
+                    "Project": proj_name,
+                    "Scenario": "(No scenarios)",
+                    "Total CAPEX (COP)": "—",
+                    "Starting PPA Price (COP/kWh)": "—",
+                    "Total MWh/year": "—",
+                    "MWp": "—",
+                    "Avg OPEX/Revenue (%)": "—",
+                    "Unlevered IRR (%)": "—",
+                    "Levered IRR (%)": "—",
+                })
+            else:
             # Get selected scenario for this project (default to first alphabetically)
             scenario_names = sorted(list(scenarios.keys()))
             default_scenario = scenario_names[0]
