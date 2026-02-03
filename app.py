@@ -3338,8 +3338,19 @@ with st.sidebar:
 # Title and Client/Project/Scenario Names (after sidebar so variables are available)
 st.markdown(f"<p style='font-size: 1.2rem; font-weight: 600; color: #1f4e79;'><strong>Client:</strong> {client_name}</p>", unsafe_allow_html=True)
 
-# Show Client Summary Dashboard only when no project is selected
-if project_name == "(New project)":
+# Toggle to show Client Summary Dashboard
+show_dashboard_key = f"show_client_dashboard_{client_name}"
+if show_dashboard_key not in st.session_state:
+    st.session_state[show_dashboard_key] = False
+
+show_dashboard = st.checkbox(
+    "📊 Show Client Summary Dashboard",
+    value=st.session_state[show_dashboard_key],
+    key=show_dashboard_key
+)
+
+# Show Client Summary Dashboard if toggle is on
+if show_dashboard:
     # Client Summary Dashboard
     st.markdown("---")
     st.markdown("### 📊 Client Summary Dashboard")
@@ -3483,9 +3494,12 @@ if project_name == "(New project)":
         st.info("No projects found in this client. Create a project to get started.")
     
     st.markdown("---")
-    st.stop()  # Stop here - don't show project/scenario tabs when showing dashboard
+    
+    # If no project is selected, stop here. Otherwise, continue to show project/scenario view below
+    if project_name == "(New project)":
+        st.stop()  # Stop here - don't show project/scenario tabs when showing dashboard and no project selected
 
-# Continue with project/scenario view if project is selected
+# Continue with project/scenario view if project is selected (or if dashboard is off)
 st.markdown(f"<p style='font-size: 1.3rem; font-weight: 600; color: #1f4e79;'><strong>Project Name:</strong> {project_name}</p>", unsafe_allow_html=True)
 st.markdown(f"<p style='font-size: 1.3rem; font-weight: 600; color: #1f4e79;'><strong>Scenario Name:</strong> {scenario_name}</p>", unsafe_allow_html=True)
 st.markdown("<br>", unsafe_allow_html=True)  # Add spacing
