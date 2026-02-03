@@ -1942,26 +1942,43 @@ def _calculate_scenario_summary_metrics(s: ScenarioInputs) -> dict:
         except Exception:
             avg_opex_revenue_ratio = 0.0
         
-        # Unlevered IRR (annual)
+        # Unlevered IRR (annual) - use annual cash flows (after-tax)
         try:
             unlevered_annual = unlevered_base_cashflow_annual(s)
-            unlevered_cf = unlevered_annual["Unlevered CF After Tax (COP)"].astype(float).tolist() if "Unlevered CF After Tax (COP)" in unlevered_annual.columns else []
-            has_pos = any(cf > 0 for cf in unlevered_cf)
-            has_neg = any(cf < 0 for cf in unlevered_cf)
-            unlevered_irr_annual = _irr_bisection(unlevered_cf) if (has_pos and has_neg) else float("nan")
-            unlevered_irr_pct = unlevered_irr_annual * 100.0 if np.isfinite(unlevered_irr_annual) else float("nan")
-        except Exception:
+            if "Unlevered CF After Tax (COP)" in unlevered_annual.columns:
+                unlevered_cf = unlevered_annual["Unlevered CF After Tax (COP)"].astype(float).tolist()
+            else:
+                # Fallback to pre-tax
+                unlevered_cf = unlevered_annual.get("Unlevered CF Pre-tax (COP)", pd.Series([0.0])).astype(float).tolist() if "Unlevered CF Pre-tax (COP)" in unlevered_annual.columns else []
+            
+            has_pos = any(cf > 0 for cf in unlevered_cf) if unlevered_cf else False
+            has_neg = any(cf < 0 for cf in unlevered_cf) if unlevered_cf else False
+            
+            if has_pos and has_neg and len(unlevered_cf) > 0:
+                unlevered_irr_annual = _irr_bisection(unlevered_cf)
+                unlevered_irr_pct = unlevered_irr_annual * 100.0 if np.isfinite(unlevered_irr_annual) else float("nan")
+            else:
+                unlevered_irr_pct = float("nan")
+        except Exception as e:
             unlevered_irr_pct = float("nan")
         
-        # Levered IRR (annual)
+        # Levered IRR (annual) - use annual cash flows (after-tax)
         try:
             levered_annual = levered_cashflow_annual(s)
-            levered_cf = levered_annual["Levered CF (After-tax, COP)"].astype(float).tolist() if "Levered CF (After-tax, COP)" in levered_annual.columns else []
-            has_pos = any(cf > 0 for cf in levered_cf)
-            has_neg = any(cf < 0 for cf in levered_cf)
-            levered_irr_annual = _irr_bisection(levered_cf) if (has_pos and has_neg) else float("nan")
-            levered_irr_pct = levered_irr_annual * 100.0 if np.isfinite(levered_irr_annual) else float("nan")
-        except Exception:
+            if "Levered CF (After-tax, COP)" in levered_annual.columns:
+                levered_cf = levered_annual["Levered CF (After-tax, COP)"].astype(float).tolist()
+            else:
+                levered_cf = []
+            
+            has_pos = any(cf > 0 for cf in levered_cf) if levered_cf else False
+            has_neg = any(cf < 0 for cf in levered_cf) if levered_cf else False
+            
+            if has_pos and has_neg and len(levered_cf) > 0:
+                levered_irr_annual = _irr_bisection(levered_cf)
+                levered_irr_pct = levered_irr_annual * 100.0 if np.isfinite(levered_irr_annual) else float("nan")
+            else:
+                levered_irr_pct = float("nan")
+        except Exception as e:
             levered_irr_pct = float("nan")
         
         return {
@@ -3329,17 +3346,20 @@ st.markdown("---")
 st.markdown("### 📊 Client Summary Dashboard")
 st.markdown(f"**Overview of all projects and scenarios in '{client_name}'**")
 
-# Option to show all scenarios or one per project
-show_all_scenarios = st.checkbox("Show all scenarios (uncheck to show one scenario per project)", value=True, key="client_summary_show_all")
-
 # Get all projects for this client
 client_projects = client.get("projects", {})
 if client_projects:
-    # Build summary data
+    # Initialize session state for scenario selections if not exists
+    scenario_selection_key = f"client_summary_scenarios_{client_name}"
+    if scenario_selection_key not in st.session_state:
+        st.session_state[scenario_selection_key] = {}
+    
+    # Build summary data - one row per project
     summary_data = []
     
     for proj_name, proj_data in sorted(client_projects.items()):
         scenarios = proj_data.get("scenarios", {})
+        
         if not scenarios:
             # Project with no scenarios - show placeholder
             summary_data.append({
@@ -3354,59 +3374,93 @@ if client_projects:
                 "Levered IRR (%)": "—",
             })
         else:
-            # Determine which scenarios to show
-            if show_all_scenarios:
-                scenarios_to_show = sorted(scenarios.items())
-            else:
-                # Show only one scenario per project - use the first one or let user select
-                # For simplicity, show the first scenario alphabetically
-                scenarios_to_show = [sorted(scenarios.items())[0]] if scenarios else []
+            # Get selected scenario for this project (default to first alphabetically)
+            scenario_names = sorted(list(scenarios.keys()))
+            default_scenario = scenario_names[0]
+            selected_scenario_key = f"{proj_name}_selected_scenario"
             
-            # For each scenario in the project
-            for scen_name, scen_data in scenarios_to_show:
-                try:
-                    # Load scenario
-                    s_summary = _scenario_from_dict(scen_data)
-                    
-                    # Calculate metrics
-                    metrics = _calculate_scenario_summary_metrics(s_summary)
-                    
-                    # Format values
-                    total_capex_str = _fmt_cop(metrics["total_capex"])
-                    starting_ppa_str = f"{metrics['starting_ppa_price']:,.4f}" if metrics["starting_ppa_price"] > 0 else "—"
-                    mwh_per_year_str = f"{metrics['total_mwh_per_year']:,.0f}" if metrics["total_mwh_per_year"] > 0 else "—"
-                    mwp_str = f"{metrics['mwp']:,.2f}" if metrics["mwp"] > 0 else "—"
-                    opex_rev_str = f"{metrics['avg_opex_revenue_ratio']:.2f}%" if not np.isnan(metrics["avg_opex_revenue_ratio"]) else "—"
-                    unlevered_irr_str = f"{metrics['unlevered_irr']:.2f}%" if np.isfinite(metrics["unlevered_irr"]) else "—"
-                    levered_irr_str = f"{metrics['levered_irr']:.2f}%" if np.isfinite(metrics["levered_irr"]) else "—"
-                    
-                    summary_data.append({
-                        "Project": proj_name,
-                        "Scenario": scen_name,
-                        "Total CAPEX (COP)": total_capex_str,
-                        "Starting PPA Price (COP/kWh)": starting_ppa_str,
-                        "Total MWh/year": mwh_per_year_str,
-                        "MWp": mwp_str,
-                        "Avg OPEX/Revenue (%)": opex_rev_str,
-                        "Unlevered IRR (%)": unlevered_irr_str,
-                        "Levered IRR (%)": levered_irr_str,
-                    })
-                except Exception as e:
-                    # If scenario fails to load or calculate, show error
-                    summary_data.append({
-                        "Project": proj_name,
-                        "Scenario": scen_name,
-                        "Total CAPEX (COP)": "Error",
-                        "Starting PPA Price (COP/kWh)": "Error",
-                        "Total MWh/year": "Error",
-                        "MWp": "Error",
-                        "Avg OPEX/Revenue (%)": "Error",
-                        "Unlevered IRR (%)": "Error",
-                        "Levered IRR (%)": "Error",
-                    })
+            if selected_scenario_key not in st.session_state[scenario_selection_key]:
+                st.session_state[scenario_selection_key][selected_scenario_key] = default_scenario
+            
+            # Get the selected scenario data
+            selected_scenario_name = st.session_state[scenario_selection_key][selected_scenario_key]
+            if selected_scenario_name not in scenarios:
+                selected_scenario_name = default_scenario
+                st.session_state[scenario_selection_key][selected_scenario_key] = default_scenario
+            
+            scen_data = scenarios[selected_scenario_name]
+            
+            try:
+                # Load scenario
+                s_summary = _scenario_from_dict(scen_data)
+                
+                # Calculate metrics
+                metrics = _calculate_scenario_summary_metrics(s_summary)
+                
+                # Format values
+                total_capex_str = _fmt_cop(metrics["total_capex"])
+                starting_ppa_str = f"{metrics['starting_ppa_price']:,.4f}" if metrics["starting_ppa_price"] > 0 else "—"
+                mwh_per_year_str = f"{metrics['total_mwh_per_year']:,.0f}" if metrics["total_mwh_per_year"] > 0 else "—"
+                mwp_str = f"{metrics['mwp']:,.2f}" if metrics["mwp"] > 0 else "—"
+                opex_rev_str = f"{metrics['avg_opex_revenue_ratio']:.2f}%" if not np.isnan(metrics["avg_opex_revenue_ratio"]) else "—"
+                unlevered_irr_str = f"{metrics['unlevered_irr']:.2f}%" if np.isfinite(metrics["unlevered_irr"]) else "—"
+                levered_irr_str = f"{metrics['levered_irr']:.2f}%" if np.isfinite(metrics["levered_irr"]) else "—"
+                
+                summary_data.append({
+                    "Project": proj_name,
+                    "Scenario": selected_scenario_name,
+                    "Total CAPEX (COP)": total_capex_str,
+                    "Starting PPA Price (COP/kWh)": starting_ppa_str,
+                    "Total MWh/year": mwh_per_year_str,
+                    "MWp": mwp_str,
+                    "Avg OPEX/Revenue (%)": opex_rev_str,
+                    "Unlevered IRR (%)": unlevered_irr_str,
+                    "Levered IRR (%)": levered_irr_str,
+                })
+            except Exception as e:
+                # If scenario fails to load or calculate, show error
+                summary_data.append({
+                    "Project": proj_name,
+                    "Scenario": selected_scenario_name,
+                    "Total CAPEX (COP)": "Error",
+                    "Starting PPA Price (COP/kWh)": "Error",
+                    "Total MWh/year": "Error",
+                    "MWp": "Error",
+                    "Avg OPEX/Revenue (%)": "Error",
+                    "Unlevered IRR (%)": "Error",
+                    "Levered IRR (%)": "Error",
+                })
     
-    # Display summary table
+    # Display scenario selectors and summary table
     if summary_data:
+        # Create a container for scenario selectors
+        with st.container():
+            st.markdown("**Select scenario for each project:**")
+            selector_cols = st.columns(min(len(client_projects), 4))  # Max 4 columns
+            
+            for idx, (proj_name, proj_data) in enumerate(sorted(client_projects.items())):
+                scenarios = proj_data.get("scenarios", {})
+                if scenarios:
+                    col_idx = idx % len(selector_cols)
+                    with selector_cols[col_idx]:
+                        scenario_names = sorted(list(scenarios.keys()))
+                        selected_scenario_key = f"{proj_name}_selected_scenario"
+                        current_selection = st.session_state[scenario_selection_key].get(selected_scenario_key, scenario_names[0])
+                        
+                        selected = st.selectbox(
+                            f"{proj_name}:",
+                            scenario_names,
+                            index=scenario_names.index(current_selection) if current_selection in scenario_names else 0,
+                            key=f"scenario_selector_{proj_name}",
+                        )
+                        # Update session state
+                        if st.session_state[scenario_selection_key].get(selected_scenario_key) != selected:
+                            st.session_state[scenario_selection_key][selected_scenario_key] = selected
+                            st.rerun()
+        
+        st.markdown("<br>", unsafe_allow_html=True)
+        
+        # Display summary table
         summary_df = pd.DataFrame(summary_data)
         st.dataframe(
             summary_df,
