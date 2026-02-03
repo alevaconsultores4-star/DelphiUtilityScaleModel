@@ -3337,28 +3337,27 @@ with st.sidebar:
 
 # Title and Client/Project/Scenario Names (after sidebar so variables are available)
 st.markdown(f"<p style='font-size: 1.2rem; font-weight: 600; color: #1f4e79;'><strong>Client:</strong> {client_name}</p>", unsafe_allow_html=True)
-st.markdown(f"<p style='font-size: 1.3rem; font-weight: 600; color: #1f4e79;'><strong>Project Name:</strong> {project_name}</p>", unsafe_allow_html=True)
-st.markdown(f"<p style='font-size: 1.3rem; font-weight: 600; color: #1f4e79;'><strong>Scenario Name:</strong> {scenario_name}</p>", unsafe_allow_html=True)
-st.markdown("<br>", unsafe_allow_html=True)  # Add spacing
 
-# Client Summary Dashboard
-st.markdown("---")
-st.markdown("### 📊 Client Summary Dashboard")
-st.markdown(f"**Overview of all projects and scenarios in '{client_name}'**")
-
-# Get all projects for this client
-client_projects = client.get("projects", {})
-if client_projects:
-    # Initialize session state for scenario selections if not exists
-    scenario_selection_key = f"client_summary_scenarios_{client_name}"
-    if scenario_selection_key not in st.session_state:
-        st.session_state[scenario_selection_key] = {}
+# Show Client Summary Dashboard only when no project is selected
+if project_name == "(New project)":
+    # Client Summary Dashboard
+    st.markdown("---")
+    st.markdown("### 📊 Client Summary Dashboard")
+    st.markdown(f"**Overview of all projects and scenarios in '{client_name}'**")
     
-    # Build summary data - one row per project
-    summary_data = []
-    
-    for proj_name, proj_data in sorted(client_projects.items()):
-        scenarios = proj_data.get("scenarios", {})
+    # Get all projects for this client
+    client_projects = client.get("projects", {})
+    if client_projects:
+        # Initialize session state for scenario selections if not exists
+        scenario_selection_key = f"client_summary_scenarios_{client_name}"
+        if scenario_selection_key not in st.session_state:
+            st.session_state[scenario_selection_key] = {}
+        
+        # Build summary data - one row per project
+        summary_data = []
+        
+        for proj_name, proj_data in sorted(client_projects.items()):
+            scenarios = proj_data.get("scenarios", {})
         
         if not scenarios:
             # Project with no scenarios - show placeholder
@@ -3430,60 +3429,66 @@ if client_projects:
                     "Unlevered IRR (%)": "Error",
                     "Levered IRR (%)": "Error",
                 })
-    
-    # Display scenario selectors and summary table
-    if summary_data:
-        # Create a container for scenario selectors
-        with st.container():
-            st.markdown("**Select scenario for each project:**")
-            selector_cols = st.columns(min(len(client_projects), 4))  # Max 4 columns
+        
+        # Display scenario selectors and summary table
+        if summary_data:
+            # Create a container for scenario selectors
+            with st.container():
+                st.markdown("**Select scenario for each project:**")
+                selector_cols = st.columns(min(len(client_projects), 4))  # Max 4 columns
+                
+                for idx, (proj_name, proj_data) in enumerate(sorted(client_projects.items())):
+                    scenarios = proj_data.get("scenarios", {})
+                    if scenarios:
+                        col_idx = idx % len(selector_cols)
+                        with selector_cols[col_idx]:
+                            scenario_names = sorted(list(scenarios.keys()))
+                            selected_scenario_key = f"{proj_name}_selected_scenario"
+                            current_selection = st.session_state[scenario_selection_key].get(selected_scenario_key, scenario_names[0])
+                            
+                            selected = st.selectbox(
+                                f"{proj_name}:",
+                                scenario_names,
+                                index=scenario_names.index(current_selection) if current_selection in scenario_names else 0,
+                                key=f"scenario_selector_{proj_name}",
+                            )
+                            # Update session state
+                            if st.session_state[scenario_selection_key].get(selected_scenario_key) != selected:
+                                st.session_state[scenario_selection_key][selected_scenario_key] = selected
+                                st.rerun()
             
-            for idx, (proj_name, proj_data) in enumerate(sorted(client_projects.items())):
-                scenarios = proj_data.get("scenarios", {})
-                if scenarios:
-                    col_idx = idx % len(selector_cols)
-                    with selector_cols[col_idx]:
-                        scenario_names = sorted(list(scenarios.keys()))
-                        selected_scenario_key = f"{proj_name}_selected_scenario"
-                        current_selection = st.session_state[scenario_selection_key].get(selected_scenario_key, scenario_names[0])
-                        
-                        selected = st.selectbox(
-                            f"{proj_name}:",
-                            scenario_names,
-                            index=scenario_names.index(current_selection) if current_selection in scenario_names else 0,
-                            key=f"scenario_selector_{proj_name}",
-                        )
-                        # Update session state
-                        if st.session_state[scenario_selection_key].get(selected_scenario_key) != selected:
-                            st.session_state[scenario_selection_key][selected_scenario_key] = selected
-                            st.rerun()
-        
-        st.markdown("<br>", unsafe_allow_html=True)
-        
-        # Display summary table
-        summary_df = pd.DataFrame(summary_data)
-        st.dataframe(
-            summary_df,
-            use_container_width=True,
-            hide_index=True,
-            column_config={
-                "Project": st.column_config.TextColumn("Project", width="medium"),
-                "Scenario": st.column_config.TextColumn("Scenario", width="medium"),
-                "Total CAPEX (COP)": st.column_config.TextColumn("Total CAPEX", width="small"),
-                "Starting PPA Price (COP/kWh)": st.column_config.TextColumn("Starting PPA Price", width="small"),
-                "Total MWh/year": st.column_config.TextColumn("Total MWh/year", width="small"),
-                "MWp": st.column_config.TextColumn("MWp", width="small"),
-                "Avg OPEX/Revenue (%)": st.column_config.TextColumn("Avg OPEX/Revenue", width="small"),
-                "Unlevered IRR (%)": st.column_config.TextColumn("Unlevered IRR", width="small"),
-                "Levered IRR (%)": st.column_config.TextColumn("Levered IRR", width="small"),
-            }
-        )
+            st.markdown("<br>", unsafe_allow_html=True)
+            
+            # Display summary table
+            summary_df = pd.DataFrame(summary_data)
+            st.dataframe(
+                summary_df,
+                use_container_width=True,
+                hide_index=True,
+                column_config={
+                    "Project": st.column_config.TextColumn("Project", width="medium"),
+                    "Scenario": st.column_config.TextColumn("Scenario", width="medium"),
+                    "Total CAPEX (COP)": st.column_config.TextColumn("Total CAPEX", width="small"),
+                    "Starting PPA Price (COP/kWh)": st.column_config.TextColumn("Starting PPA Price", width="small"),
+                    "Total MWh/year": st.column_config.TextColumn("Total MWh/year", width="small"),
+                    "MWp": st.column_config.TextColumn("MWp", width="small"),
+                    "Avg OPEX/Revenue (%)": st.column_config.TextColumn("Avg OPEX/Revenue", width="small"),
+                    "Unlevered IRR (%)": st.column_config.TextColumn("Unlevered IRR", width="small"),
+                    "Levered IRR (%)": st.column_config.TextColumn("Levered IRR", width="small"),
+                }
+            )
+        else:
+            st.info("No projects found in this client.")
     else:
-        st.info("No projects found in this client.")
-else:
-    st.info("No projects found in this client. Create a project to get started.")
+        st.info("No projects found in this client. Create a project to get started.")
     
-st.markdown("---")
+    st.markdown("---")
+    st.stop()  # Stop here - don't show project/scenario tabs when showing dashboard
+
+# Continue with project/scenario view if project is selected
+st.markdown(f"<p style='font-size: 1.3rem; font-weight: 600; color: #1f4e79;'><strong>Project Name:</strong> {project_name}</p>", unsafe_allow_html=True)
+st.markdown(f"<p style='font-size: 1.3rem; font-weight: 600; color: #1f4e79;'><strong>Scenario Name:</strong> {scenario_name}</p>", unsafe_allow_html=True)
+st.markdown("<br>", unsafe_allow_html=True)  # Add spacing
 
 # Tabs (top-down)
 tab_overview, tab_macro, tab_timeline, tab_gen, tab_rev, tab_capex, tab_opex, tab_sga, tab_dep, tab_incent, tab_ucf, tab_debt, tab_levered, tab_compare, tab_sensitivity, tab_summary = st.tabs(
