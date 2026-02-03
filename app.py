@@ -3339,14 +3339,11 @@ with st.sidebar:
 st.markdown(f"<p style='font-size: 1.2rem; font-weight: 600; color: #1f4e79;'><strong>Client:</strong> {client_name}</p>", unsafe_allow_html=True)
 
 # Toggle to show Client Summary Dashboard
-show_dashboard_key = f"show_client_dashboard_{client_name}"
-if show_dashboard_key not in st.session_state:
-    st.session_state[show_dashboard_key] = False
-
+st.markdown("---")  # Add a visual separator
 show_dashboard = st.checkbox(
     "📊 Show Client Summary Dashboard",
-    value=st.session_state[show_dashboard_key],
-    key=show_dashboard_key
+    value=False,
+    key=f"show_dashboard_{client_name}_{project_name}"  # Make key unique per client+project
 )
 
 # Show Client Summary Dashboard if toggle is on
