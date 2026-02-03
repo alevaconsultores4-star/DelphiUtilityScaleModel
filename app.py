@@ -3349,8 +3349,11 @@ show_dashboard = st.checkbox(
 
 # Show Client Summary Dashboard if toggle is on
 if show_dashboard:
-    # Client Summary Dashboard
-    st.markdown("---")
+    # Client Summary Dashboard with darker background
+    st.markdown("""
+    <div style='background-color: #f0f2f6; padding: 20px; border-radius: 10px; margin: 10px 0;'>
+    """, unsafe_allow_html=True)
+    
     st.markdown("### 📊 Client Summary Dashboard")
     st.markdown(f"**Overview of all projects and scenarios in '{client_name}'**")
     
@@ -3367,10 +3370,10 @@ if show_dashboard:
         
         for proj_name, proj_data in sorted(client_projects.items()):
             scenarios = proj_data.get("scenarios", {})
-        
-        if not scenarios:
-            # Project with no scenarios - show placeholder
-            summary_data.append({
+            
+            if not scenarios:
+                # Project with no scenarios - show placeholder
+                summary_data.append({
                 "Project": proj_name,
                 "Scenario": "(No scenarios)",
                 "Total CAPEX (COP)": "—",
@@ -3491,6 +3494,9 @@ if show_dashboard:
     else:
         st.info("No projects found in this client. Create a project to get started.")
     
+    st.markdown("""
+    </div>
+    """, unsafe_allow_html=True)
     st.markdown("---")
     
     # If no project is selected, stop here. Otherwise, continue to show project/scenario view below
