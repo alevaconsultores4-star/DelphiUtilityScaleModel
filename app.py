@@ -3899,9 +3899,10 @@ with tab_capex:
     current_saved_lines = s.capex.lines or []
     current_hash = hash(str(sorted([(x.get("Item", ""), x.get("Amount_COP", 0), x.get("Phase", "")) for x in current_saved_lines])))
     
-    # Check if database has been updated (hash changed) or session state doesn't exist
-    if capex_edit_key not in st.session_state or st.session_state.get(capex_hash_key) != current_hash:
-        # Initialize or refresh from database
+    # Only initialize session state if it doesn't exist
+    # Don't reset on hash mismatch during editing - only reset if explicitly requested (via Refresh button)
+    if capex_edit_key not in st.session_state:
+        # Initialize from database
         capex_df = pd.DataFrame(current_saved_lines)
         for col in ["Item", "Amount_COP", "Phase"]:
             if col not in capex_df.columns:
@@ -3912,7 +3913,12 @@ with tab_capex:
         st.session_state[capex_edit_key] = capex_df
         st.session_state[capex_hash_key] = current_hash
     else:
+        # Use existing session state (preserves user edits)
         capex_df = st.session_state[capex_edit_key].copy()
+        # Only update hash if it's different (for tracking, but don't reset)
+        if st.session_state.get(capex_hash_key) != current_hash:
+            # Database was updated externally - update hash but keep session state
+            st.session_state[capex_hash_key] = current_hash
     
     # Ensure Delete column exists
     if "Delete" not in capex_df.columns:
