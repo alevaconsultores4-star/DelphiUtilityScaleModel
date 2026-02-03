@@ -1892,6 +1892,99 @@ def _total_capex_from_lines(s: ScenarioInputs) -> float:
         return 0.0
     return float(pd.to_numeric(cap_df["Amount_COP"], errors="coerce").fillna(0.0).sum())
 
+
+def _calculate_scenario_summary_metrics(s: ScenarioInputs) -> dict:
+    """
+    Calculate summary metrics for a scenario.
+    Returns a dict with: total_capex, starting_ppa_price, total_mwh_per_year, mwp, avg_opex_revenue_ratio, unlevered_irr, levered_irr
+    """
+    try:
+        # Total CAPEX
+        total_capex = _total_capex_from_lines(s)
+        
+        # Starting PPA price
+        if s.revenue_mode == "Standard PPA Parameters":
+            starting_ppa_price = float(s.revenue1.ppa_price_cop_per_kwh)
+        else:
+            # Manual pricing - get first operating year price
+            first_year_price = s.revenue2.prices_constant_cop_per_kwh.get(1, 0.0)
+            starting_ppa_price = float(first_year_price) if first_year_price else 0.0
+        
+        # Total MWh/year (based on production choice)
+        gen = s.generation
+        p_map = {"P50": gen.p50_mwh_yr, "P75": gen.p75_mwh_yr, "P90": gen.p90_mwh_yr}
+        total_mwh_per_year = float(p_map.get(gen.production_choice, gen.p50_mwh_yr))
+        
+        # MWp
+        mwp = float(s.generation.mwp)
+        
+        # Average OPEX / Revenue ratio
+        try:
+            op_table = operating_year_table(s)
+            opex_monthly = opex_monthly_schedule(s)
+            
+            # Sum OPEX for operating years
+            tl = build_timeline(s.timeline)
+            cod_year = tl["cod"].year
+            end_op_year = tl["end_op"].year
+            
+            # Filter OPEX to operating years only
+            opex_operating = opex_monthly[
+                (opex_monthly["Year"] >= cod_year) & 
+                (opex_monthly["Year"] <= end_op_year)
+            ]
+            total_opex = float(opex_operating["OPEX (COP)"].sum()) if not opex_operating.empty and "OPEX (COP)" in opex_operating.columns else 0.0
+            
+            # Total revenue from operating years
+            total_revenue = float(op_table["Revenue (COP)"].sum()) if not op_table.empty and "Revenue (COP)" in op_table.columns else 0.0
+            
+            avg_opex_revenue_ratio = (total_opex / total_revenue * 100.0) if total_revenue > 0 else 0.0
+        except Exception:
+            avg_opex_revenue_ratio = 0.0
+        
+        # Unlevered IRR (annual)
+        try:
+            unlevered_annual = unlevered_base_cashflow_annual(s)
+            unlevered_cf = unlevered_annual["Unlevered CF After Tax (COP)"].astype(float).tolist() if "Unlevered CF After Tax (COP)" in unlevered_annual.columns else []
+            has_pos = any(cf > 0 for cf in unlevered_cf)
+            has_neg = any(cf < 0 for cf in unlevered_cf)
+            unlevered_irr_annual = _irr_bisection(unlevered_cf) if (has_pos and has_neg) else float("nan")
+            unlevered_irr_pct = unlevered_irr_annual * 100.0 if np.isfinite(unlevered_irr_annual) else float("nan")
+        except Exception:
+            unlevered_irr_pct = float("nan")
+        
+        # Levered IRR (annual)
+        try:
+            levered_annual = levered_cashflow_annual(s)
+            levered_cf = levered_annual["Levered CF (After-tax, COP)"].astype(float).tolist() if "Levered CF (After-tax, COP)" in levered_annual.columns else []
+            has_pos = any(cf > 0 for cf in levered_cf)
+            has_neg = any(cf < 0 for cf in levered_cf)
+            levered_irr_annual = _irr_bisection(levered_cf) if (has_pos and has_neg) else float("nan")
+            levered_irr_pct = levered_irr_annual * 100.0 if np.isfinite(levered_irr_annual) else float("nan")
+        except Exception:
+            levered_irr_pct = float("nan")
+        
+        return {
+            "total_capex": total_capex,
+            "starting_ppa_price": starting_ppa_price,
+            "total_mwh_per_year": total_mwh_per_year,
+            "mwp": mwp,
+            "avg_opex_revenue_ratio": avg_opex_revenue_ratio,
+            "unlevered_irr": unlevered_irr_pct,
+            "levered_irr": levered_irr_pct,
+        }
+    except Exception as e:
+        # Return default values if calculation fails
+        return {
+            "total_capex": 0.0,
+            "starting_ppa_price": 0.0,
+            "total_mwh_per_year": 0.0,
+            "mwp": 0.0,
+            "avg_opex_revenue_ratio": 0.0,
+            "unlevered_irr": float("nan"),
+            "levered_irr": float("nan"),
+        }
+
 def _eligible_capex_for_tax(s: ScenarioInputs) -> float:
     total_capex = _total_capex_from_lines(s)
     pct = max(0.0, min(100.0, s.renewable_tax.special_deduction_pct_of_capex))
@@ -3230,6 +3323,113 @@ st.markdown(f"<p style='font-size: 1.2rem; font-weight: 600; color: #1f4e79;'><s
 st.markdown(f"<p style='font-size: 1.3rem; font-weight: 600; color: #1f4e79;'><strong>Project Name:</strong> {project_name}</p>", unsafe_allow_html=True)
 st.markdown(f"<p style='font-size: 1.3rem; font-weight: 600; color: #1f4e79;'><strong>Scenario Name:</strong> {scenario_name}</p>", unsafe_allow_html=True)
 st.markdown("<br>", unsafe_allow_html=True)  # Add spacing
+
+# Client Summary Dashboard
+st.markdown("---")
+st.markdown("### 📊 Client Summary Dashboard")
+st.markdown(f"**Overview of all projects and scenarios in '{client_name}'**")
+
+# Option to show all scenarios or one per project
+show_all_scenarios = st.checkbox("Show all scenarios (uncheck to show one scenario per project)", value=True, key="client_summary_show_all")
+
+# Get all projects for this client
+client_projects = client.get("projects", {})
+if client_projects:
+    # Build summary data
+    summary_data = []
+    
+    for proj_name, proj_data in sorted(client_projects.items()):
+        scenarios = proj_data.get("scenarios", {})
+        if not scenarios:
+            # Project with no scenarios - show placeholder
+            summary_data.append({
+                "Project": proj_name,
+                "Scenario": "(No scenarios)",
+                "Total CAPEX (COP)": "—",
+                "Starting PPA Price (COP/kWh)": "—",
+                "Total MWh/year": "—",
+                "MWp": "—",
+                "Avg OPEX/Revenue (%)": "—",
+                "Unlevered IRR (%)": "—",
+                "Levered IRR (%)": "—",
+            })
+        else:
+            # Determine which scenarios to show
+            if show_all_scenarios:
+                scenarios_to_show = sorted(scenarios.items())
+            else:
+                # Show only one scenario per project - use the first one or let user select
+                # For simplicity, show the first scenario alphabetically
+                scenarios_to_show = [sorted(scenarios.items())[0]] if scenarios else []
+            
+            # For each scenario in the project
+            for scen_name, scen_data in scenarios_to_show:
+                try:
+                    # Load scenario
+                    s_summary = _scenario_from_dict(scen_data)
+                    
+                    # Calculate metrics
+                    metrics = _calculate_scenario_summary_metrics(s_summary)
+                    
+                    # Format values
+                    total_capex_str = _fmt_cop(metrics["total_capex"])
+                    starting_ppa_str = f"{metrics['starting_ppa_price']:,.4f}" if metrics["starting_ppa_price"] > 0 else "—"
+                    mwh_per_year_str = f"{metrics['total_mwh_per_year']:,.0f}" if metrics["total_mwh_per_year"] > 0 else "—"
+                    mwp_str = f"{metrics['mwp']:,.2f}" if metrics["mwp"] > 0 else "—"
+                    opex_rev_str = f"{metrics['avg_opex_revenue_ratio']:.2f}%" if not np.isnan(metrics["avg_opex_revenue_ratio"]) else "—"
+                    unlevered_irr_str = f"{metrics['unlevered_irr']:.2f}%" if np.isfinite(metrics["unlevered_irr"]) else "—"
+                    levered_irr_str = f"{metrics['levered_irr']:.2f}%" if np.isfinite(metrics["levered_irr"]) else "—"
+                    
+                    summary_data.append({
+                        "Project": proj_name,
+                        "Scenario": scen_name,
+                        "Total CAPEX (COP)": total_capex_str,
+                        "Starting PPA Price (COP/kWh)": starting_ppa_str,
+                        "Total MWh/year": mwh_per_year_str,
+                        "MWp": mwp_str,
+                        "Avg OPEX/Revenue (%)": opex_rev_str,
+                        "Unlevered IRR (%)": unlevered_irr_str,
+                        "Levered IRR (%)": levered_irr_str,
+                    })
+                except Exception as e:
+                    # If scenario fails to load or calculate, show error
+                    summary_data.append({
+                        "Project": proj_name,
+                        "Scenario": scen_name,
+                        "Total CAPEX (COP)": "Error",
+                        "Starting PPA Price (COP/kWh)": "Error",
+                        "Total MWh/year": "Error",
+                        "MWp": "Error",
+                        "Avg OPEX/Revenue (%)": "Error",
+                        "Unlevered IRR (%)": "Error",
+                        "Levered IRR (%)": "Error",
+                    })
+    
+    # Display summary table
+    if summary_data:
+        summary_df = pd.DataFrame(summary_data)
+        st.dataframe(
+            summary_df,
+            use_container_width=True,
+            hide_index=True,
+            column_config={
+                "Project": st.column_config.TextColumn("Project", width="medium"),
+                "Scenario": st.column_config.TextColumn("Scenario", width="medium"),
+                "Total CAPEX (COP)": st.column_config.TextColumn("Total CAPEX", width="small"),
+                "Starting PPA Price (COP/kWh)": st.column_config.TextColumn("Starting PPA Price", width="small"),
+                "Total MWh/year": st.column_config.TextColumn("Total MWh/year", width="small"),
+                "MWp": st.column_config.TextColumn("MWp", width="small"),
+                "Avg OPEX/Revenue (%)": st.column_config.TextColumn("Avg OPEX/Revenue", width="small"),
+                "Unlevered IRR (%)": st.column_config.TextColumn("Unlevered IRR", width="small"),
+                "Levered IRR (%)": st.column_config.TextColumn("Levered IRR", width="small"),
+            }
+        )
+    else:
+        st.info("No projects found in this client.")
+else:
+    st.info("No projects found in this client. Create a project to get started.")
+    
+st.markdown("---")
 
 # Tabs (top-down)
 tab_overview, tab_macro, tab_timeline, tab_gen, tab_rev, tab_capex, tab_opex, tab_sga, tab_dep, tab_incent, tab_ucf, tab_debt, tab_levered, tab_compare, tab_sensitivity, tab_summary = st.tabs(
