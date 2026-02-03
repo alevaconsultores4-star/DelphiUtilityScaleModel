@@ -3336,6 +3336,7 @@ with st.sidebar:
     compare_scenarios = st.multiselect("Select scenarios", scen_names, default=[])
 
 # Title and Client/Project/Scenario Names (after sidebar so variables are available)
+# Note: This code only runs if a scenario is selected (not "(New scenario)")
 st.markdown(f"<p style='font-size: 1.2rem; font-weight: 600; color: #1f4e79;'><strong>Client:</strong> {client_name}</p>", unsafe_allow_html=True)
 
 # Toggle to show Client Summary Dashboard
@@ -3343,7 +3344,7 @@ st.markdown("---")  # Add a visual separator
 show_dashboard = st.checkbox(
     "📊 Show Client Summary Dashboard",
     value=False,
-    key=f"show_dashboard_{client_name}_{project_name}"  # Make key unique per client+project
+    key=f"show_dashboard_{client_name}_{project_name}_{scenario_name}"  # Make key unique per client+project+scenario
 )
 
 # Show Client Summary Dashboard if toggle is on
