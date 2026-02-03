@@ -431,12 +431,15 @@ def _default_opex_other_items() -> List[Dict[str, object]]:
 @dataclass
 class OpexInputs:
     fixed_om_cop_per_mwac_year: float = 0.0
+    fixed_om_unit: str = "COP/MWac-year"  # Options: "COP/MWac-year", "COP/MWp-year", "Annual COP", "COP/MWh"
     fixed_om_indexation: str = "Colombia CPI"
 
     variable_om_cop_per_mwh: float = 0.0
+    variable_om_unit: str = "COP/MWh"  # Options: "COP/MWh", "COP/MWac-year", "COP/MWp-year", "Annual COP"
     variable_om_indexation: str = "Colombia CPI"
 
     insurance_cop_per_mwac_year: float = 0.0
+    insurance_unit: str = "COP/MWac-year"  # Options: "COP/MWac-year", "COP/MWp-year", "Annual COP", "COP/MWh"
     insurance_indexation: str = "Colombia CPI"
 
     grid_fees_cop_per_mwh: float = 0.0
@@ -1206,13 +1209,66 @@ def opex_monthly_schedule(s: ScenarioInputs) -> pd.DataFrame:
     idx_ins = df["Year"].apply(lambda y: index_factor_for_year(s.macro, int(y), base_year, s.opex.insurance_indexation))
     idx_land = df["Year"].apply(lambda y: index_factor_for_year(s.macro, int(y), base_year, s.opex.land_indexation))
 
+    # Helper function to convert OPEX value to monthly COP based on unit (for Fixed O&M and Insurance)
+    def _convert_opex_to_monthly(value: float, unit: str, mwac: float, mwp: float, monthly_energy_mwh: float = 0.0) -> float:
+        """Convert OPEX value from various units to monthly COP."""
+        if unit == "COP/MWac-year":
+            return value * mwac / 12.0
+        elif unit == "COP/MWp-year":
+            return value * mwp / 12.0
+        elif unit == "Annual COP":
+            return value / 12.0
+        elif unit == "COP/MWh":
+            # For fixed costs, if user wants per MWh, use monthly energy
+            return value * monthly_energy_mwh
+        else:
+            # Default to COP/MWac-year for backward compatibility
+            return value * mwac / 12.0
+    
+    # Helper function to convert variable OPEX value to per-MWh
+    def _convert_variable_opex_to_per_mwh(value: float, unit: str, mwac: float, mwp: float, annual_energy_mwh: float = 0.0) -> float:
+        """Convert variable OPEX value from various units to COP/MWh."""
+        if unit == "COP/MWh":
+            return value
+        elif unit == "COP/MWac-year":
+            # Convert: (COP/MWac-year * MWac) / Annual MWh = COP/MWh
+            return (value * mwac) / annual_energy_mwh if annual_energy_mwh > 0 else 0.0
+        elif unit == "COP/MWp-year":
+            # Convert: (COP/MWp-year * MWp) / Annual MWh = COP/MWh
+            return (value * mwp) / annual_energy_mwh if annual_energy_mwh > 0 else 0.0
+        elif unit == "Annual COP":
+            # Convert: Annual COP / Annual MWh = COP/MWh
+            return value / annual_energy_mwh if annual_energy_mwh > 0 else 0.0
+        else:
+            # Default to COP/MWh for backward compatibility
+            return value
+    
+    # Calculate annual energy for variable O&M conversion
+    annual_energy = df[df["Phase"] == "Operation"]["Energy (MWh)"].sum() if len(df[df["Phase"] == "Operation"]) > 0 else 0.0
+    
+    # Fixed O&M calculation
     df["Fixed O&M"] = 0.0
-    df.loc[df["Phase"] == "Operation", "Fixed O&M"] = (float(s.opex.fixed_om_cop_per_mwac_year) * mwac / 12.0) * idx_fixed[df["Phase"] == "Operation"].values
+    fixed_om_unit = getattr(s.opex, "fixed_om_unit", "COP/MWac-year")
+    fixed_om_value = float(s.opex.fixed_om_cop_per_mwac_year)
+    for idx in df[df["Phase"] == "Operation"].index:
+        monthly_energy_mwh = df.loc[idx, "Energy (MWh)"] if "Energy (MWh)" in df.columns else 0.0
+        monthly_value = _convert_opex_to_monthly(fixed_om_value, fixed_om_unit, mwac, mwp, monthly_energy_mwh)
+        df.loc[idx, "Fixed O&M"] = monthly_value * idx_fixed.loc[idx]
 
+    # Insurance calculation
     df["Insurance"] = 0.0
-    df.loc[df["Phase"] == "Operation", "Insurance"] = (float(s.opex.insurance_cop_per_mwac_year) * mwac / 12.0) * idx_ins[df["Phase"] == "Operation"].values
+    insurance_unit = getattr(s.opex, "insurance_unit", "COP/MWac-year")
+    insurance_value = float(s.opex.insurance_cop_per_mwac_year)
+    for idx in df[df["Phase"] == "Operation"].index:
+        monthly_energy_mwh = df.loc[idx, "Energy (MWh)"] if "Energy (MWh)" in df.columns else 0.0
+        monthly_value = _convert_opex_to_monthly(insurance_value, insurance_unit, mwac, mwp, monthly_energy_mwh)
+        df.loc[idx, "Insurance"] = monthly_value * idx_ins.loc[idx]
 
-    df["Variable O&M"] = float(s.opex.variable_om_cop_per_mwh) * df["Energy (MWh)"]
+    # Variable O&M: convert to COP/MWh first, then multiply by monthly energy
+    variable_om_unit = getattr(s.opex, "variable_om_unit", "COP/MWh")
+    variable_om_value = float(s.opex.variable_om_cop_per_mwh)
+    variable_om_per_mwh = _convert_variable_opex_to_per_mwh(variable_om_value, variable_om_unit, mwac, mwp, annual_energy)
+    df["Variable O&M"] = variable_om_per_mwh * df["Energy (MWh)"]
     df["Grid fees"] = float(s.opex.grid_fees_cop_per_mwh) * df["Energy (MWh)"]
 
     ha = float(s.opex.land_hectares or 0.0)
@@ -4053,13 +4109,34 @@ with tab_opex:
 
     c1, c2, c3 = st.columns(3)
     with c1:
-        s.opex.fixed_om_cop_per_mwac_year = st.number_input("Fixed O&M (COP/MWac-year)", value=float(s.opex.fixed_om_cop_per_mwac_year), step=1_000_000.0, format="%.0f")
+        # Fixed O&M with unit selection
+        fixed_om_units = ["COP/MWac-year", "COP/MWp-year", "Annual COP", "COP/MWh"]
+        fixed_om_unit = getattr(s.opex, "fixed_om_unit", "COP/MWac-year")
+        fixed_om_unit_idx = fixed_om_units.index(fixed_om_unit) if fixed_om_unit in fixed_om_units else 0
+        s.opex.fixed_om_unit = st.selectbox("Fixed O&M unit", fixed_om_units, index=fixed_om_unit_idx, key="fixed_om_unit")
+        
+        label_fixed = f"Fixed O&M ({s.opex.fixed_om_unit})"
+        s.opex.fixed_om_cop_per_mwac_year = st.number_input(label_fixed, value=float(s.opex.fixed_om_cop_per_mwac_year), step=1_000_000.0 if "Annual" in s.opex.fixed_om_unit else 1_000.0, format="%.0f", key="fixed_om_value")
         s.opex.fixed_om_indexation = st.selectbox("Fixed O&M indexation", INDEX_CHOICES, index=INDEX_CHOICES.index(s.opex.fixed_om_indexation) if s.opex.fixed_om_indexation in INDEX_CHOICES else 0)
     with c2:
-        s.opex.variable_om_cop_per_mwh = st.number_input("Variable O&M (COP/MWh)", value=float(s.opex.variable_om_cop_per_mwh), step=1_000.0, format="%.0f")
+        # Variable O&M with unit selection
+        variable_om_units = ["COP/MWh", "COP/MWac-year", "COP/MWp-year", "Annual COP"]
+        variable_om_unit = getattr(s.opex, "variable_om_unit", "COP/MWh")
+        variable_om_unit_idx = variable_om_units.index(variable_om_unit) if variable_om_unit in variable_om_units else 0
+        s.opex.variable_om_unit = st.selectbox("Variable O&M unit", variable_om_units, index=variable_om_unit_idx, key="variable_om_unit")
+        
+        label_var = f"Variable O&M ({s.opex.variable_om_unit})"
+        s.opex.variable_om_cop_per_mwh = st.number_input(label_var, value=float(s.opex.variable_om_cop_per_mwh), step=1_000.0, format="%.0f", key="variable_om_value")
         s.opex.grid_fees_cop_per_mwh = st.number_input("Grid fees (COP/MWh)", value=float(s.opex.grid_fees_cop_per_mwh), step=1_000.0, format="%.0f")
     with c3:
-        s.opex.insurance_cop_per_mwac_year = st.number_input("Insurance (COP/MWac-year)", value=float(s.opex.insurance_cop_per_mwac_year), step=1_000_000.0, format="%.0f")
+        # Insurance with unit selection
+        insurance_units = ["COP/MWac-year", "COP/MWp-year", "Annual COP", "COP/MWh"]
+        insurance_unit = getattr(s.opex, "insurance_unit", "COP/MWac-year")
+        insurance_unit_idx = insurance_units.index(insurance_unit) if insurance_unit in insurance_units else 0
+        s.opex.insurance_unit = st.selectbox("Insurance unit", insurance_units, index=insurance_unit_idx, key="insurance_unit")
+        
+        label_ins = f"Insurance ({s.opex.insurance_unit})"
+        s.opex.insurance_cop_per_mwac_year = st.number_input(label_ins, value=float(s.opex.insurance_cop_per_mwac_year), step=1_000_000.0 if "Annual" in s.opex.insurance_unit else 1_000.0, format="%.0f", key="insurance_value")
         s.opex.insurance_indexation = st.selectbox("Insurance indexation", INDEX_CHOICES, index=INDEX_CHOICES.index(s.opex.insurance_indexation) if s.opex.insurance_indexation in INDEX_CHOICES else 0)
 
     st.markdown("#### Land lease")
