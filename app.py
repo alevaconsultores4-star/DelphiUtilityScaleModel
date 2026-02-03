@@ -3385,9 +3385,9 @@ if show_dashboard:
                     "Levered IRR (%)": "—",
                 })
             else:
-            # Get selected scenario for this project (default to first alphabetically)
-            scenario_names = sorted(list(scenarios.keys()))
-            default_scenario = scenario_names[0]
+                # Get selected scenario for this project (default to first alphabetically)
+                scenario_names = sorted(list(scenarios.keys()))
+                default_scenario = scenario_names[0]
             selected_scenario_key = f"{proj_name}_selected_scenario"
             
             if selected_scenario_key not in st.session_state[scenario_selection_key]:
